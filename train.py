@@ -258,7 +258,7 @@ def main(args):
                     imageio.imwrite(os.path.join(test_pth_AB, fn_A), tensor2image(fake_AB_test[0]))
 
                     fn_B = os.path.basename(batch_['img_B'][0])
-                    imageio.imwrite(os.path.join(test_pth_AB, fn_B), tensor2image(fake_BA_test[0]))
+                    imageio.imwrite(os.path.join(test_pth_BA, fn_B), tensor2image(fake_BA_test[0]))
 
             if iter % args.model_save_interval == 0:
                 # Save models checkpoints
