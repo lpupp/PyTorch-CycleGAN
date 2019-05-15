@@ -20,6 +20,10 @@ RUN_NAME=shoes2dresses
 OUTPUT_DIR=${DATA_BASE_PATH}/output/${RUN_DOMAIN}/${RUN_NAME}
 DATAROOT=${DATA_BASE_PATH}/${RUN_DOMAIN}/${RUN_NAME}
 
+mkdir ${DATA_BASE_PATH}/output/
+mkdir ${DATA_BASE_PATH}/output/${RUN_DOMAIN}
+mkdir ${OUTPUT_DIR}
+
 # Hyper-params
 IMG_SIZE=256
 BS=1
