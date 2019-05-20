@@ -30,6 +30,7 @@ parser.add_argument('--output_nc', type=int, default=3, help='number of channels
 parser.add_argument('--cuda', action='store_true', help='use GPU computation')
 parser.add_argument('--n_cpu', type=int, default=8, help='number of cpu threads to use during batch generation')
 
+parser.add_argument('--upsample', action='store_true', help='If True: upsample; else: transposed 2D conv')
 parser.add_argument('--G_extra', action='store_true', help='use extra layers in G')
 parser.add_argument('--D_extra', action='store_true', help='use extra layers in D')
 
@@ -71,8 +72,8 @@ def main(args):
 
     # Definition of variables ######
     # Networks
-    netG_A2B = Generator(args.input_nc, args.output_nc, extra_layer=args.G_extra)
-    netG_B2A = Generator(args.output_nc, args.input_nc, extra_layer=args.G_extra)
+    netG_A2B = Generator(args.input_nc, args.output_nc, extra_layer=args.G_extra, upsample=args.upsample)
+    netG_B2A = Generator(args.output_nc, args.input_nc, extra_layer=args.G_extra, upsample=args.upsample)
     netD_A = Discriminator(args.input_nc, extra_layer=args.D_extra)
     netD_B = Discriminator(args.output_nc, extra_layer=args.D_extra)
 
