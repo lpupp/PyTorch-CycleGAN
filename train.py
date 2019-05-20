@@ -59,10 +59,11 @@ def as_np(tensor):
 
 
 def main(args):
-    modelarch = 'C_{}_{}_{}{}{}{}'.format(args.size, args.batch_size, args.lr,
+    modelarch = 'C_{}_{}_{}{}{}{}{}'.format(args.size, args.batch_size, args.lr,
                                          '_' if args.G_extra or args.D_extra else '',
                                          'G' if args.G_extra else '',
-                                         'D' if args.D_extra else '')
+                                         'D' if args.D_extra else '',
+                                         '_U' if args.upsample else '')
     samples_path = os.path.join(args.output_dir, modelarch, 'samples')
     safe_mkdirs(samples_path)
     model_path = os.path.join(args.output_dir, modelarch, 'models')
