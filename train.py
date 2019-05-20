@@ -113,7 +113,7 @@ def main(args):
         transforms_ += [transforms.Resize(int(args.size*1.12), Image.BICUBIC),
                         transforms.RandomCrop(args.size)]
     else:
-        transforms_ += [transforms.Resize(int(args.size), Image.BICUBIC)]
+        transforms_ += [transforms.Resize(args.size, Image.BICUBIC)]
 
     if args.horizontal_flip:
         transforms_ += [transforms.RandomHorizontalFlip()]
@@ -130,11 +130,16 @@ def main(args):
     # Training ######
     #logger = Logger(args.n_epochs, len(dataloader), args.output_dir)
 
+    print('image size arg:', args.size)
+    print('transforms:', transforms_)
+    print('input_A size: {}; input_B size: {}'.format(input_A.shape, input_B.shape))
+
     iter = 0
     prev_time = time.time()
     for epoch in range(args.load_iter, args.n_epochs):
         for i, batch in enumerate(dataloader):
             # Set model input
+            print('batch dims--- A: {}; B: {}'.format(batch['A'].shape, batch['B'].shape))
             real_A = Variable(input_A.copy_(batch['A']))
             real_B = Variable(input_B.copy_(batch['B']))
 
