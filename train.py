@@ -123,8 +123,8 @@ def main(args):
     dataloader = DataLoader(ImageDataset(args.dataroot, transforms_=transforms_, unaligned=True),
                             batch_size=args.batch_size, shuffle=True, num_workers=args.n_cpu)
 
-    transforms_test_ = [transforms.ToTensor(),
-                        transforms.Resize(args.size, Image.BICUBIC),
+    transforms_test_ = [transforms.Resize(args.size, Image.BICUBIC),
+                        transforms.ToTensor(),
                         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
     dataloader_test = DataLoader(ImageDataset(args.dataroot, transforms_=transforms_test_, mode='test'),
                                  batch_size=args.batch_size, shuffle=False, num_workers=args.n_cpu)
