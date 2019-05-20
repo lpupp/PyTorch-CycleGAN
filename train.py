@@ -31,8 +31,10 @@ parser.add_argument('--cuda', action='store_true', help='use GPU computation')
 parser.add_argument('--n_cpu', type=int, default=8, help='number of cpu threads to use during batch generation')
 
 parser.add_argument('--upsample', action='store_true', help='If True: upsample; else: transposed 2D conv')
+parser.add_argument('--keep_prop', action='store_true', help='Keep weights proportional to 3:64 ratio')
 parser.add_argument('--G_extra', action='store_true', help='use extra layers in G')
 parser.add_argument('--D_extra', action='store_true', help='use extra layers in D')
+parser.add_argument('--slow_D', action='store_true', help='Slow the training of D to avoid mode collapse')
 
 parser.add_argument('--horizontal_flip', action='store_true', help='augment data by flipping horizontally')
 parser.add_argument('--resize_crop', action='store_true', help='augment reading in image too large and cropping')
@@ -58,12 +60,30 @@ def as_np(tensor):
     return tensor.cpu().float().detach().numpy()
 
 
+def get_fm_loss(real_feats, fake_feats, criterion, cuda):
+    # TODO(lpupp) need to output discriminator intermediates and find best way
+    # to weight fm_loss in total loss.
+    losses = 0
+    for real_feat, fake_feat in zip(real_feats, fake_feats):
+        l2 = (real_feat.mean(0) - fake_feat.mean(0)) * (real_feat.mean(0) - fake_feat.mean(0))
+        if cuda:
+            loss = criterion(l2, Variable(torch.ones(l2.size())).cuda())
+        else:
+            loss = criterion(l2, Variable(torch.ones(l2.size())))
+        losses += loss
+
+    return losses
+
+
 def main(args):
+    torch.manual_seed(0)
+
     modelarch = 'C_{}_{}_{}{}{}{}{}'.format(args.size, args.batch_size, args.lr,
-                                         '_' if args.G_extra or args.D_extra else '',
-                                         'G' if args.G_extra else '',
-                                         'D' if args.D_extra else '',
-                                         '_U' if args.upsample else '')
+                                            '_' if args.G_extra or args.D_extra else '',
+                                            'G' if args.G_extra else '',
+                                            'D' if args.D_extra else '',
+                                            '_U' if args.upsample else '',
+                                            '_S' if args.slow_D else '')
     samples_path = os.path.join(args.output_dir, modelarch, 'samples')
     safe_mkdirs(samples_path)
     model_path = os.path.join(args.output_dir, modelarch, 'models')
@@ -73,8 +93,8 @@ def main(args):
 
     # Definition of variables ######
     # Networks
-    netG_A2B = Generator(args.input_nc, args.output_nc, extra_layer=args.G_extra, upsample=args.upsample)
-    netG_B2A = Generator(args.output_nc, args.input_nc, extra_layer=args.G_extra, upsample=args.upsample)
+    netG_A2B = Generator(args.input_nc, args.output_nc, img_size=args.size, extra_layer=args.G_extra, upsample=args.upsample, keep_weights_proportional=args.keep_prop)
+    netG_B2A = Generator(args.output_nc, args.input_nc, img_size=args.size, extra_layer=args.G_extra, upsample=args.upsample, keep_weights_proportional=args.keep_prop)
     netD_A = Discriminator(args.input_nc, extra_layer=args.D_extra)
     netD_B = Discriminator(args.output_nc, extra_layer=args.D_extra)
 
@@ -93,12 +113,17 @@ def main(args):
     criterion_GAN = torch.nn.MSELoss()
     criterion_cycle = torch.nn.L1Loss()
     criterion_identity = torch.nn.L1Loss()
+    #feat_criterion = nn.HingeEmbeddingLoss()  # TODO
+
+    # I could also update D only if iters % 2 == 0
+    lr_G = args.lr
+    lr_D = args.lr / 2 if args.slow_D else args.lr
 
     # Optimizers & LR schedulers
     optimizer_G = torch.optim.Adam(itertools.chain(netG_A2B.parameters(), netG_B2A.parameters()),
                                    lr=args.lr, betas=(0.5, 0.999))
-    optimizer_D_A = torch.optim.Adam(netD_A.parameters(), lr=args.lr, betas=(0.5, 0.999))
-    optimizer_D_B = torch.optim.Adam(netD_B.parameters(), lr=args.lr, betas=(0.5, 0.999))
+    optimizer_D_A = torch.optim.Adam(netD_A.parameters(), lr=lr_G, betas=(0.5, 0.999))
+    optimizer_D_B = torch.optim.Adam(netD_B.parameters(), lr=lr_D, betas=(0.5, 0.999))
 
     lr_scheduler_G = torch.optim.lr_scheduler.LambdaLR(optimizer_G, lr_lambda=LambdaLR(args.n_epochs, args.load_iter, args.decay_epoch).step)
     lr_scheduler_D_A = torch.optim.lr_scheduler.LambdaLR(optimizer_D_A, lr_lambda=LambdaLR(args.n_epochs, args.load_iter, args.decay_epoch).step)
@@ -137,8 +162,6 @@ def main(args):
     dataloader_test = DataLoader(ImageDataset(args.dataroot, transforms_=transforms_test_, mode='test'),
                                  batch_size=args.batch_size, shuffle=False, num_workers=args.n_cpu)
     # Training ######
-    #logger = Logger(args.n_epochs, len(dataloader), args.output_dir)
-
     iter = 0
     prev_time = time.time()
     for epoch in range(args.load_iter, args.n_epochs):
@@ -192,8 +215,14 @@ def main(args):
             pred_fake = netD_A(fake_A.detach())
             loss_D_fake = criterion_GAN(pred_fake, target_fake)
 
+            #pred_real, feats_real = netD_A(real_A)
+            #pred_fake, feats_fake = netD_A(fake_A.detach())
+
+            #fm_loss = get_fm_loss(feats_real, feats_fake, feat_criterion, args.cuda)
+
             # Total loss
             loss_D_A = (loss_D_real + loss_D_fake)*0.5
+            #loss_D_A = (loss_D_real + loss_D_fake)*0.5 + fm_loss*0.9  # TODO
             loss_D_A.backward()
 
             optimizer_D_A.step()
@@ -210,16 +239,17 @@ def main(args):
             pred_fake = netD_B(fake_B.detach())
             loss_D_fake = criterion_GAN(pred_fake, target_fake)
 
+            #pred_real, feats_real = netD_B(real_B)
+            #pred_fake, feats_fake = netD_B(fake_B.detach())
+
+            #fm_loss = get_fm_loss(feats_real, feats_fake, feat_criterion, args.cuda)
+
             # Total loss
             loss_D_B = (loss_D_real + loss_D_fake)*0.5
+            #loss_D_B = (loss_D_real + loss_D_fake)*0.5 + fm_loss*0.9  # TODO
             loss_D_B.backward()
 
             optimizer_D_B.step()
-
-            # Progress report
-            #logger.log({'loss_G': loss_G, 'loss_G_identity': (loss_identity_A + loss_identity_B), 'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
-            #            'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)},
-            #           images={'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B})
 
             if iter % args.log_interval == 0:
 

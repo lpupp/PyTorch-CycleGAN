@@ -36,11 +36,25 @@ class Interpolate(nn.Module):
 
 class Generator(nn.Module):
     def __init__(self, input_nc, output_nc, n_residual_blocks=9,
-                 #filter_dim=3,
+                 img_size=64, keep_weights_proportional=False,
                  extra_layer=False, upsample=False):
         super(Generator, self).__init__()
 
-        filter_dim = 3
+        if keep_weights_proportional:
+            if upsample:
+                if img_size == 64:
+                    filter_dim, n_padding = 3, 1
+                elif img_size == 128:
+                    filter_dim, n_padding = 7, 3
+                elif img_size == 256:
+                    filter_dim, n_padding = 13, 6
+                else:
+                    raise NotImplementedError
+            else:
+                raise ValueError('Cannot keep_weights_proportional if upsample False')
+        else:
+            filter_dim, n_padding = 3, 1
+
         # Initial convolution block
         model = [nn.ReflectionPad2d(3),
                  nn.Conv2d(input_nc, 64, 7),
@@ -54,11 +68,11 @@ class Generator(nn.Module):
         # W=(W−F+2P)/S+1
         for _ in range(2):
             if extra_layer:
-                model += [nn.Conv2d(in_features, in_features, 3, padding=1),
+                model += [nn.Conv2d(in_features, in_features, filter_dim, padding=n_padding),
                           nn.InstanceNorm2d(in_features),
                           nn.ReLU(inplace=True)]
 
-            model += [nn.Conv2d(in_features, out_features, filter_dim, stride=2, padding=1),
+            model += [nn.Conv2d(in_features, out_features, filter_dim, stride=2, padding=n_padding),
                       nn.InstanceNorm2d(out_features),
                       nn.ReLU(inplace=True)]
             in_features = out_features
@@ -73,11 +87,11 @@ class Generator(nn.Module):
         if upsample:
             for _ in range(2):
                 if extra_layer:
-                    model += [nn.Conv2d(in_features, in_features, 3, padding=1),
+                    model += [nn.Conv2d(in_features, in_features, filter_dim, padding=n_padding),
                               nn.InstanceNorm2d(in_features),
                               nn.ReLU(inplace=True)]
 
-                model += [nn.Conv2d(in_features, out_features, 3, padding=1),
+                model += [nn.Conv2d(in_features, out_features, filter_dim, padding=n_padding),
                           nn.InstanceNorm2d(out_features),
                           nn.ReLU(inplace=True),
                           Interpolate(2.0)]
@@ -99,7 +113,7 @@ class Generator(nn.Module):
                               nn.InstanceNorm2d(in_features),
                               nn.ReLU(inplace=True)]
 
-                model += [nn.ConvTranspose2d(in_features, out_features, filter_dim, stride=2, padding=1, output_padding=1),
+                model += [nn.ConvTranspose2d(in_features, out_features, 3, stride=2, padding=1, output_padding=1),
                           nn.InstanceNorm2d(out_features),
                           nn.ReLU(inplace=True)]
                 in_features = out_features
@@ -122,7 +136,7 @@ class Discriminator(nn.Module):
 
         # A bunch of convolutions one after another
         model = [nn.Conv2d(input_nc, 64, 4, stride=2, padding=1),
-                  nn.LeakyReLU(0.2, inplace=True)]
+                 nn.LeakyReLU(0.2, inplace=True)]
 
         model += [nn.Conv2d(64, 128, 4, stride=2, padding=1),
                   nn.InstanceNorm2d(128),
