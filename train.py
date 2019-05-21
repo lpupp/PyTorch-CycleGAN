@@ -17,6 +17,8 @@ from models import Generator, Discriminator
 from utils import ReplayBuffer, LambdaLR, weights_init_normal  # , Logger
 from datasets import ImageDataset
 
+from eval_score import ConvNetFeatureSaver
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--load_iter', type=int, default=0, help='starting epoch')
 parser.add_argument('--n_epochs', type=int, default=200, help='number of epochs of training')
@@ -40,6 +42,7 @@ parser.add_argument('--horizontal_flip', action='store_true', help='augment data
 parser.add_argument('--resize_crop', action='store_true', help='augment reading in image too large and cropping')
 
 parser.add_argument('--output_dir', type=str, default='data/output/fashion/shoes2dresses', help='output directory')
+parser.add_argument('--score_interval', type=int, default=50, help='Calculate out-of-sample scores every score_interval iterations.')
 parser.add_argument('--log_interval', type=int, default=50, help='Print loss values every log_interval iterations.')
 parser.add_argument('--plot_interval', type=int, default=50, help='Print loss values every plot_interval iterations.')
 parser.add_argument('--image_save_interval', type=int, default=1000, help='Save test results every image_save_interval iterations.')
@@ -162,8 +165,12 @@ def main(args):
     dataloader_test = DataLoader(ImageDataset(args.dataroot, transforms_=transforms_test_, mode='test'),
                                  batch_size=args.batch_size, shuffle=False, num_workers=args.n_cpu)
     # Training ######
+    gan_metrics = ConvNetFeatureSaver()
     iter = 0
     prev_time = time.time()
+
+    csv_fn = os.path.join(args.output_dir, modelarch, modelarch + '.csv')
+
     for epoch in range(args.load_iter, args.n_epochs):
         for i, batch in enumerate(dataloader):
             # Set model input
@@ -263,6 +270,24 @@ def main(args):
 
             if iter % args.plot_interval == 0:
                 pass
+
+            if iter % args.score_interval == 0:
+                print('Calculating score')
+
+                for j, batch_ in enumerate(dataloader_test):
+                    real_A_test = Variable(input_A.copy_(batch_['A']))
+                    real_B_test = Variable(input_B.copy_(batch_['B']))
+
+                    fake_AB_test = netG_A2B(real_A_test)
+                    fake_BA_test = netG_B2A(real_B_test)
+                    gan_metrics.save(real_A_test.detact(),
+                                     real_B_test.detact(),
+                                     fake_BA_test.detact(),
+                                     fake_AB_test.detact())
+
+                score = gan_metrics.calculate_scores()
+                with open(csv_fn, 'a') as f:
+                    f.write('\n' + ','.join(str(e) for e in score))
 
             if iter % args.image_save_interval == 0:
                 samples_path_ = os.path.join(samples_path, str(iter / args.image_save_interval))
