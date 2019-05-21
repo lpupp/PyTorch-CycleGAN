@@ -281,10 +281,10 @@ def main(args):
 
                     fake_AB_test = netG_A2B(real_A_test)
                     fake_BA_test = netG_B2A(real_B_test)
-                    gan_metrics.save(real_A_test.detact(),
-                                     real_B_test.detact(),
-                                     fake_BA_test.detact(),
-                                     fake_AB_test.detact())
+                    gan_metrics.save(real_A_test.detach(),
+                                     real_B_test.detach(),
+                                     fake_BA_test.detach(),
+                                     fake_AB_test.detach())
 
                 score = gan_metrics.calculate_scores()
                 with open(csv_fn, 'a') as f:
