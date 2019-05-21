@@ -17,7 +17,7 @@ from models import Generator, Discriminator
 from utils import ReplayBuffer, LambdaLR, weights_init_normal  # , Logger
 from datasets import ImageDataset
 
-from eval_score import ConvNetFeatureSaver
+#from eval_score import ConvNetFeatureSaver
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--load_iter', type=int, default=0, help='starting epoch')
@@ -166,11 +166,11 @@ def main(args):
     dataloader_test = DataLoader(ImageDataset(args.dataroot, transforms_=transforms_test_, mode='test'),
                                  batch_size=args.batch_size, shuffle=False, num_workers=args.n_cpu)
     # Training ######
-    gan_metrics = ConvNetFeatureSaver()
     iter = 0
     prev_time = time.time()
 
-    csv_fn = os.path.join(args.output_dir, modelarch, modelarch + '.csv')
+    #gan_metrics = ConvNetFeatureSaver()
+    #csv_fn = os.path.join(args.output_dir, modelarch, modelarch + '.csv')
 
     for epoch in range(args.load_iter, args.n_epochs):
         for i, batch in enumerate(dataloader):
@@ -273,22 +273,23 @@ def main(args):
                 pass
 
             if iter % args.score_interval == 0:
-                print('Calculating score')
-
-                for j, batch_ in enumerate(dataloader_test):
-                    real_A_test = Variable(input_A.copy_(batch_['A']))
-                    real_B_test = Variable(input_B.copy_(batch_['B']))
-
-                    fake_AB_test = netG_A2B(real_A_test)
-                    fake_BA_test = netG_B2A(real_B_test)
-                    gan_metrics.save(real_A_test.detach(),
-                                     real_B_test.detach(),
-                                     fake_BA_test.detach(),
-                                     fake_AB_test.detach())
-
-                score = gan_metrics.calculate_scores()
-                with open(csv_fn, 'a') as f:
-                    f.write('\n' + ','.join(str(e) for e in score))
+                pass
+                # print('Calculating score')
+                #
+                # for j, batch_ in enumerate(dataloader_test):
+                #     real_A_test = Variable(input_A.copy_(batch_['A']))
+                #     real_B_test = Variable(input_B.copy_(batch_['B']))
+                #
+                #     fake_AB_test = netG_A2B(real_A_test)
+                #     fake_BA_test = netG_B2A(real_B_test)
+                #     gan_metrics.save(real_A_test.detach(),
+                #                      real_B_test.detach(),
+                #                      fake_BA_test.detach(),
+                #                      fake_AB_test.detach())
+                #
+                # score = gan_metrics.calculate_scores()
+                # with open(csv_fn, 'a') as f:
+                #     f.write('\n' + ','.join(str(e) for e in score))
 
             if iter % args.image_save_interval == 0:
                 samples_path_ = os.path.join(samples_path, str(iter / args.image_save_interval))
