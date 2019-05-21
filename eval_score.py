@@ -55,7 +55,7 @@ from glob import glob
 
 
 def to_torch(x):
-    return dict((k, torch.cat(v, 0).to('cpu')) for k, v in x.items()
+    return dict((k, torch.cat(v, 0).to('cpu')) for k, v in x.items())
 
 
 class ConvNetFeatureSaver(object):

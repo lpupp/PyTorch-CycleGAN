@@ -82,11 +82,12 @@ def main(args):
     torch.manual_seed(0)
 
     modelarch = 'C_{0}_{1}_{2}{3}{4}{5}{6}{7}'.format(args.size, args.batch_size, args.lr,  #0, 1, 2
-                                            '_' if args.G_extra or args.D_extra else '',  # 3
-                                            'G' if args.G_extra else '',  # 4
-                                            'D' if args.D_extra else '',  # 5
-                                            '_U' if args.upsample else '',  # 6
-                                            '_S' if args.slow_D else '')  # 7
+                                                      '_' if args.G_extra or args.D_extra else '',  # 3
+                                                      'G' if args.G_extra else '',  # 4
+                                                      'D' if args.D_extra else '',  # 5
+                                                      '_U' if args.upsample else '',  # 6
+                                                      '_S' if args.slow_D else '')  # 7
+
     samples_path = os.path.join(args.output_dir, modelarch, 'samples')
     safe_mkdirs(samples_path)
     model_path = os.path.join(args.output_dir, modelarch, 'models')
