@@ -1,3 +1,14 @@
+"""CycleGAN implementation Pytorch.
+
+mode collapse techniques:
+- mini-batch discrimination (implemented as --mb_D)
+- wasserstein loss (implemented as --wasserstein)
+- experience replace (implemeted as ReplayBuffer: dim = 50)
+https://medium.com/@utk.is.here/training-a-conditional-dc-gan-on-cifar-10-fce88395d610
+
+- decay cycle (reconstruction) loss (implemented as --recon_loss_acay and --recon_acay_rate <- [0.0 1.0) )
+https://ssnl.github.io/better_cycles/report.pdf
+"""
 import os
 import argparse
 import itertools
@@ -39,7 +50,9 @@ parser.add_argument('--G_extra', action='store_true', help='use extra layers in 
 parser.add_argument('--D_extra', action='store_true', help='use extra layers in D')
 parser.add_argument('--slow_D', action='store_true', help='Slow the training of D to avoid mode collapse')
 parser.add_argument('--recon_loss_acay', action='store_true', help='increase relative importance of recon loss')
-parser.add_argument('--recon_acay_rate', type=float, default=2, help='increase relative importance of recon loss (rate)')
+parser.add_argument('--recon_acay_rate', type=float, default=2.0, help='increase relative importance of recon loss (rate)')
+parser.add_argument('--wasserstein', action='store_true', help='use wasserstein loss for D')
+parser.add_argument('--mb_D', action='store_true', help='Mini-batch discrimination')
 
 parser.add_argument('--img_norm', type=str, default='znorm', help='How to normalize images: znorm|scale01|scale01flip')
 
@@ -83,10 +96,19 @@ def get_fm_loss(real_feats, fake_feats, criterion, cuda):
     return losses
 
 
+def wasserstein_loss(prediction, target_is_real):
+    if target_is_real:
+        loss = -prediction.mean()
+    else:
+        loss = prediction.mean()
+    return loss
+
+
 def main(args):
     torch.manual_seed(0)
+    assert not args.mb_D, 'Mini-batch discrimination not implemented yet'
 
-    modelarch = 'C_{0}_{1}_{2}{3}{4}{5}{6}{7}{8}{9}_{10}'.format(
+    modelarch = 'C_{0}_{1}_{2}{3}{4}{5}{6}{7}{8}{9}_{10}{11}{12}'.format(
         args.size, args.batch_size, args.lr,  # 0, 1, 2
         '_' if args.G_extra or args.D_extra else '',  # 3
         'G' if args.G_extra else '',  # 4
@@ -95,7 +117,9 @@ def main(args):
         '_S' if args.slow_D else '',  # 7
         '_RL{}'.format(args.recon_acay_rate) if args.recon_loss_acay else '',  # 8
         '_prop' if args.keep_prop else '',  # 9
-        args.img_norm)  # 10
+        args.img_norm,  # 10
+        '_W' if args.wasserstein else '',  # 11
+        '_MBD' if args.mb_D else '')  # 12
 
     samples_path = os.path.join(args.output_dir, modelarch, 'samples')
     safe_mkdirs(samples_path)
@@ -123,7 +147,7 @@ def main(args):
     netD_B.apply(weights_init_normal)
 
     # Lossess
-    criterion_GAN = torch.nn.MSELoss()
+    criterion_GAN = wasserstein_loss if args.wasserstein else torch.nn.MSELoss()
     criterion_cycle = torch.nn.L1Loss()
     criterion_identity = torch.nn.L1Loss()
     #feat_criterion = nn.HingeEmbeddingLoss()  # TODO
