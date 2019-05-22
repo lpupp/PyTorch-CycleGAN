@@ -182,7 +182,8 @@ def main(args):
         if args.recon_loss_acay:
             if epoch > recon_loss_acay_trigger:
                 effective_epoch = (epoch - recon_loss_acay_trigger)
-                recon_loss_rate = 1.0 + (effective_epoch/(args.n_epochs - recon_loss_acay_trigger)) * (args.recon_acay_rate - 1)
+                # the recon_loss_rate maxes out before n_epoch (because of "- args.decay_epoch")
+                recon_loss_rate = 1.0 + (effective_epoch/(args.n_epochs - args.decay_epoch)) * (args.recon_acay_rate - 1)
 
         for i, batch in enumerate(dataloader):
             # Set model input
