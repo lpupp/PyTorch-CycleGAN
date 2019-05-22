@@ -22,6 +22,7 @@ from datasets import ImageDataset
 parser = argparse.ArgumentParser()
 parser.add_argument('--load_iter', type=int, default=0, help='starting epoch')
 parser.add_argument('--n_epochs', type=int, default=200, help='number of epochs of training')
+parser.add_argument('--n_test', type=int, default=100, help='number of test samples to spit out')
 parser.add_argument('--batch_size', type=int, default=1, help='size of the batches')
 parser.add_argument('--dataroot', type=str, default='data/fashion/', help='root directory of the dataset')
 parser.add_argument('--lr', type=float, default=0.0002, help='initial learning rate')
@@ -38,8 +39,9 @@ parser.add_argument('--G_extra', action='store_true', help='use extra layers in 
 parser.add_argument('--D_extra', action='store_true', help='use extra layers in D')
 parser.add_argument('--slow_D', action='store_true', help='Slow the training of D to avoid mode collapse')
 parser.add_argument('--recon_loss_acay', action='store_true', help='increase relative importance of recon loss')
-parser.add_argument('--recon_acay_rate', type=float, default=2, help='increase relative importance of recon loss')
+parser.add_argument('--recon_acay_rate', type=float, default=2, help='increase relative importance of recon loss (rate)')
 
+parser.add_argument('--img_norm', type=str, default='znorm', help='How to normalize images: znorm|scale01|scale01flip')
 
 parser.add_argument('--horizontal_flip', action='store_true', help='augment data by flipping horizontally')
 parser.add_argument('--resize_crop', action='store_true', help='augment reading in image too large and cropping')
@@ -159,14 +161,27 @@ def main(args):
     if args.horizontal_flip:
         transforms_ += [transforms.RandomHorizontalFlip()]
 
-    transforms_ += [transforms.ToTensor(),
-                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+    transforms_ += [transforms.ToTensor()]
+
+    transforms_norm = []
+    if args.img_norm == 'znorm':
+        transforms_norm += [transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+    elif 'scale01' in args.img_norm:
+        transforms_norm += [transforms.Lambda(lambda x: x.mul(1/255))]
+        if 'flip' in args.img_norm:
+            transforms_norm += [transforms.Lambda(lambda x: (x - 1).abs())]
+    else:
+        raise ValueError('wrong --img_norm. only znorm|scale01|scale01flip')
+
+    transforms_ += transforms_norm
+
     dataloader = DataLoader(ImageDataset(args.dataroot, transforms_=transforms_, unaligned=True),
                             batch_size=args.batch_size, shuffle=True, num_workers=args.n_cpu)
 
     transforms_test_ = [transforms.Resize(args.size, Image.BICUBIC),
-                        transforms.ToTensor(),
-                        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+                        transforms.ToTensor()]
+    transforms_test_ += transforms_norm
+
     dataloader_test = DataLoader(ImageDataset(args.dataroot, transforms_=transforms_test_, mode='test'),
                                  batch_size=args.batch_size, shuffle=False, num_workers=args.n_cpu)
     # Training ######
@@ -317,22 +332,26 @@ def main(args):
                 safe_mkdirs(test_pth_BA)
 
                 for j, batch_ in enumerate(dataloader_test):
+
+                        break
+
                     real_A_test = Variable(input_A.copy_(batch_['A']))
                     real_B_test = Variable(input_B.copy_(batch_['B']))
 
                     fake_AB_test = netG_A2B(real_A_test)
                     fake_BA_test = netG_B2A(real_B_test)
 
-                    recovered_ABA_test = netG_B2A(fake_AB_test)
-                    recovered_BAB_test = netG_A2B(fake_AB_test)
+                    if j < args.n_test:
+                        recovered_ABA_test = netG_B2A(fake_AB_test)
+                        recovered_BAB_test = netG_A2B(fake_AB_test)
 
-                    fn = os.path.join(samples_path_, str(j))
-                    imageio.imwrite(fn + '.A.jpg', tensor2image(real_A_test[0]))
-                    imageio.imwrite(fn + '.B.jpg', tensor2image(real_B_test[0]))
-                    imageio.imwrite(fn + '.BA.jpg', tensor2image(fake_BA_test[0]))
-                    imageio.imwrite(fn + '.AB.jpg', tensor2image(fake_AB_test[0]))
-                    imageio.imwrite(fn + '.ABA.jpg', tensor2image(recovered_ABA_test[0]))
-                    imageio.imwrite(fn + '.BAB.jpg', tensor2image(recovered_BAB_test[0]))
+                        fn = os.path.join(samples_path_, str(j))
+                        imageio.imwrite(fn + '.A.jpg', tensor2image(real_A_test[0]))
+                        imageio.imwrite(fn + '.B.jpg', tensor2image(real_B_test[0]))
+                        imageio.imwrite(fn + '.BA.jpg', tensor2image(fake_BA_test[0]))
+                        imageio.imwrite(fn + '.AB.jpg', tensor2image(fake_AB_test[0]))
+                        imageio.imwrite(fn + '.ABA.jpg', tensor2image(recovered_ABA_test[0]))
+                        imageio.imwrite(fn + '.BAB.jpg', tensor2image(recovered_BAB_test[0]))
 
                     fn_A = os.path.basename(batch_['img_A'][0])
                     imageio.imwrite(os.path.join(test_pth_AB, fn_A), tensor2image(fake_AB_test[0]))
