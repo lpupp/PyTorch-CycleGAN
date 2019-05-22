@@ -335,8 +335,6 @@ def main(args):
 
                 for j, batch_ in enumerate(dataloader_test):
 
-                        break
-
                     real_A_test = Variable(input_A.copy_(batch_['A']))
                     real_B_test = Variable(input_B.copy_(batch_['B']))
 
