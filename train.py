@@ -37,6 +37,9 @@ parser.add_argument('--keep_prop', action='store_true', help='Keep weights propo
 parser.add_argument('--G_extra', action='store_true', help='use extra layers in G')
 parser.add_argument('--D_extra', action='store_true', help='use extra layers in D')
 parser.add_argument('--slow_D', action='store_true', help='Slow the training of D to avoid mode collapse')
+parser.add_argument('--recon_loss_acay', action='store_true', help='increase relative importance of recon loss')
+parser.add_argument('--recon_acay_rate', type=float, default=2, help='increase relative importance of recon loss')
+
 
 parser.add_argument('--horizontal_flip', action='store_true', help='augment data by flipping horizontally')
 parser.add_argument('--resize_crop', action='store_true', help='augment reading in image too large and cropping')
@@ -172,7 +175,15 @@ def main(args):
     #gan_metrics = ConvNetFeatureSaver()
     #csv_fn = os.path.join(args.output_dir, modelarch, modelarch + '.csv')
 
+    recon_loss_acay_trigger = int(args.decay_epoch * 0.5)
     for epoch in range(args.load_iter, args.n_epochs):
+
+        recon_loss_rate = 1.0
+        if args.recon_loss_acay:
+            if epoch > recon_loss_acay_trigger:
+                effective_epoch = (epoch - recon_loss_acay_trigger)
+                recon_loss_rate = 1.0 + (effective_epoch/(args.n_epochs - recon_loss_acay_trigger)) * (args.recon_acay_rate - 1)
+
         for i, batch in enumerate(dataloader):
             # Set model input
             real_A = Variable(input_A.copy_(batch['A']))
@@ -206,7 +217,7 @@ def main(args):
             loss_cycle_BAB = criterion_cycle(recovered_B, real_B) * 10.0
 
             # Total loss
-            loss_G = loss_identity_A + loss_identity_B + loss_GAN_A2B + loss_GAN_B2A + loss_cycle_ABA + loss_cycle_BAB
+            loss_G = loss_identity_A + loss_identity_B + loss_GAN_A2B + loss_GAN_B2A + (loss_cycle_ABA + loss_cycle_BAB) * recon_loss_rate
             loss_G.backward()
 
             optimizer_G.step()
@@ -266,6 +277,7 @@ def main(args):
                 print("Identity loss:", as_np(loss_identity_A), as_np(loss_identity_B))
                 print("Cycle loss:", as_np(loss_cycle_ABA), as_np(loss_cycle_BAB))
                 print("D loss:", as_np(loss_D_A), as_np(loss_D_B))
+                print("recon loss rate:", recon_loss_rate)
                 print("time:", time.time() - prev_time)
                 prev_time = time.time()
 
