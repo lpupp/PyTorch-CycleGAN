@@ -93,9 +93,9 @@ def main(args):
         'D' if args.D_extra else '',  # 5
         '_U' if args.upsample else '',  # 6
         '_S' if args.slow_D else '',  # 7
-        '_RL' if args.recon_loss_acay else '',  # 8
+        '_RL{}'.format(args.recon_acay_rate) if args.recon_loss_acay else '',  # 8
         '_prop' if args.keep_prop else '',  # 9
-        args.img_norm) #10
+        args.img_norm)  # 10
 
     samples_path = os.path.join(args.output_dir, modelarch, 'samples')
     safe_mkdirs(samples_path)
