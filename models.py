@@ -1,5 +1,40 @@
+"""Mini-batch discrimination pytorch implementation.
+
+source:
+https://gist.github.com/t-ae/732f78671643de97bbe2c46519972491
+"""
+import torch
 import torch.nn as nn
+import torch.nn.init as init
 import torch.nn.functional as F
+
+
+class MinibatchDiscrimination(nn.Module):
+    def __init__(self, in_features, out_features, kernel_dims, mean=False):
+        super().__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.kernel_dims = kernel_dims
+        self.mean = mean
+        self.T = nn.Parameter(torch.Tensor(in_features, out_features, kernel_dims))
+        init.normal(self.T, 0, 1)
+
+    def forward(self, x):
+        # x is NxA
+        # T is AxBxC
+        matrices = x.mm(self.T.view(self.in_features, -1))
+        matrices = matrices.view(-1, self.out_features, self.kernel_dims)
+
+        M = matrices.unsqueeze(0)  # 1xNxBxC
+        M_T = M.permute(1, 0, 2, 3)  # Nx1xBxC
+        norm = torch.abs(M - M_T).sum(3)  # NxNxB
+        expnorm = torch.exp(-norm)
+        o_b = (expnorm.sum(0) - 1)   # NxB, subtract self distance
+        if self.mean:
+            o_b /= x.size(0) - 1
+
+        x = torch.cat([x, o_b], 1)
+        return x
 
 
 class ResidualBlock(nn.Module):
@@ -131,41 +166,120 @@ class Generator(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, input_nc, extra_layer=False):
+    def __init__(self, input_nc, extra_layer=False, mb_D=False):
         super(Discriminator, self).__init__()
 
+        # # A bunch of convolutions one after another
+        # model = [nn.Conv2d(input_nc, 64, 4, stride=2, padding=1),
+        #          nn.LeakyReLU(0.2, inplace=True)]
+        #
+        # model += [nn.Conv2d(64, 128, 4, stride=2, padding=1),
+        #           nn.InstanceNorm2d(128),
+        #           nn.LeakyReLU(0.2, inplace=True)]
+        #
+        # if extra_layer:
+        #     model += [nn.Conv2d(128, 128, 3, padding=1),
+        #               nn.InstanceNorm2d(128),
+        #               nn.LeakyReLU(0.2, inplace=True)]
+        #
+        # model += [nn.Conv2d(128, 256, 4, stride=2, padding=1),
+        #           nn.InstanceNorm2d(256),
+        #           nn.LeakyReLU(0.2, inplace=True)]
+        #
+        # if extra_layer:
+        #     model += [nn.Conv2d(256, 256, 3, padding=1),
+        #               nn.InstanceNorm2d(256),
+        #               nn.LeakyReLU(0.2, inplace=True)]
+        #
+        # model += [nn.Conv2d(256, 512, 4, padding=1),
+        #           nn.InstanceNorm2d(512),
+        #           nn.LeakyReLU(0.2, inplace=True)]
+        #
+        # # FCN classification layer
+        # model += [nn.Conv2d(512, 1, 4, padding=1)]
+        #
+        # self.model = nn.Sequential(*model)
+
+        self.extra_layer = extra_layer
         # A bunch of convolutions one after another
-        model = [nn.Conv2d(input_nc, 64, 4, stride=2, padding=1),
-                 nn.LeakyReLU(0.2, inplace=True)]
+        self.conv1 = nn.Conv2d(input_nc, 64, 4, stride=2, padding=1)
+        self.relu1 = nn.LeakyReLU(0.2, inplace=True)
 
-        model += [nn.Conv2d(64, 128, 4, stride=2, padding=1),
-                  nn.InstanceNorm2d(128),
-                  nn.LeakyReLU(0.2, inplace=True)]
+        self.conv2 = nn.Conv2d(64, 128, 4, stride=2, padding=1)
+        self.in2 = nn.InstanceNorm2d(128)
+        self.relu2 = nn.LeakyReLU(0.2, inplace=True)
 
-        if extra_layer:
-            model += [nn.Conv2d(128, 128, 3, padding=1),
-                      nn.InstanceNorm2d(128),
-                      nn.LeakyReLU(0.2, inplace=True)]
+        if self.extra_layer:
+            self.conv2e = nn.Conv2d(128, 128, 3, padding=1)
+            self.in2e = nn.InstanceNorm2d(128)
+            self.relu2e = nn.LeakyReLU(0.2, inplace=True)
 
-        model += [nn.Conv2d(128, 256, 4, stride=2, padding=1),
-                  nn.InstanceNorm2d(256),
-                  nn.LeakyReLU(0.2, inplace=True)]
+        self.conv3 = nn.Conv2d(128, 256, 4, stride=2, padding=1)
+        self.in3 = nn.InstanceNorm2d(256)
+        self.relu3 = nn.LeakyReLU(0.2, inplace=True)
 
-        if extra_layer:
-            model += [nn.Conv2d(256, 256, 3, padding=1),
-                      nn.InstanceNorm2d(256),
-                      nn.LeakyReLU(0.2, inplace=True)]
+        if self.extra_layer:
+            self.conv3 = nn.Conv2d(256, 256, 3, padding=1)
+            self.in3 = nn.InstanceNorm2d(256)
+            self.relu3 = nn.LeakyReLU(0.2, inplace=True)
 
-        model += [nn.Conv2d(256, 512, 4, padding=1),
-                  nn.InstanceNorm2d(512),
-                  nn.LeakyReLU(0.2, inplace=True)]
+        self.conv4 = nn.Conv2d(256, 512, 4, padding=1)
+        self.bn4 = nn.InstanceNorm2d(512)
+        self.relu4 = nn.LeakyReLU(0.2, inplace=True)
 
-        # FCN classification layer
-        model += [nn.Conv2d(512, 1, 4, padding=1)]
-
-        self.model = nn.Sequential(*model)
+        self.conv5 = nn.Conv2d(512, 1, 4, padding=1)
 
     def forward(self, x):
-        x = self.model(x)
-        # Average pooling and flatten
-        return F.avg_pool2d(x, x.size()[2:]).view(x.size()[0], -1)
+        # x = self.model(x)
+        # # Average pooling and flatten
+        # return F.avg_pool2d(x, x.size()[2:]).view(x.size()[0], -1)
+
+        if self.extra_layer:
+            conv1 = self.conv1(x)
+            relu1 = self.relu1(conv1)
+
+            conv2 = self.conv2(relu1)
+            bn2 = self.bn2(conv2)
+            relu2 = self.relu2(bn2)
+
+            conv2e = self.conv2e(relu2)
+            bn2e = self.bn2e(conv2e)
+            relu2e = self.relu2e(bn2e)
+
+            conv3 = self.conv3(relu2e)
+            bn3 = self.bn3(conv3)
+            relu3 = self.relu3(bn3)
+
+            conv3e = self.conv3e(relu3)
+            bn3e = self.bn3e(conv3e)
+            relu3e = self.relu3e(bn3e)
+
+            conv4 = self.conv4(relu3e)
+            bn4 = self.bn4(conv4)
+            relu4 = self.relu4(bn4)
+
+            conv5 = self.conv5(relu4)
+
+            relus = [relu2, relu2e, relu3, relu3e, relu4]
+
+        else:
+            conv1 = self.conv1(x)
+            relu1 = self.relu1(conv1)
+
+            conv2 = self.conv2(relu1)
+            bn2 = self.bn2(conv2)
+            relu2 = self.relu2(bn2)
+
+            conv3 = self.conv3(relu2)
+            bn3 = self.bn3(conv3)
+            relu3 = self.relu3(bn3)
+
+            conv4 = self.conv4(relu3)
+            bn4 = self.bn4(conv4)
+            relu4 = self.relu4(bn4)
+
+            conv5 = self.conv5(relu4)
+
+            relus = [relu2, relu3, relu4]
+
+        return torch.sigmoid(conv5), relus

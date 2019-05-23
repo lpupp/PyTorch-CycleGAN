@@ -33,7 +33,9 @@ from datasets import ImageDataset
 parser = argparse.ArgumentParser()
 parser.add_argument('--load_iter', type=int, default=0, help='starting epoch')
 parser.add_argument('--n_epochs', type=int, default=200, help='number of epochs of training')
-parser.add_argument('--n_test', type=int, default=100, help='number of test samples to spit out')
+parser.add_argument('--n_test', type=int, default=None, help='number of test samples to spit out')
+parser.add_argument('--n_sample', type=int, default=60, help='number ofsample samples to spit out')
+
 parser.add_argument('--batch_size', type=int, default=1, help='size of the batches')
 parser.add_argument('--dataroot', type=str, default='data/fashion/', help='root directory of the dataset')
 parser.add_argument('--lr', type=float, default=0.0002, help='initial learning rate')
@@ -53,6 +55,7 @@ parser.add_argument('--recon_loss_acay', action='store_true', help='increase rel
 parser.add_argument('--recon_acay_rate', type=float, default=2.0, help='increase relative importance of recon loss (rate)')
 parser.add_argument('--wasserstein', action='store_true', help='use wasserstein loss for D')
 parser.add_argument('--mb_D', action='store_true', help='Mini-batch discrimination')
+parser.add_argument('--fm_loss', action='store_true', help='Feature matching loss')
 
 parser.add_argument('--img_norm', type=str, default='znorm', help='How to normalize images: znorm|scale01|scale01flip')
 
@@ -82,8 +85,6 @@ def as_np(tensor):
 
 
 def get_fm_loss(real_feats, fake_feats, criterion, cuda):
-    # TODO(lpupp) need to output discriminator intermediates and find best way
-    # to weight fm_loss in total loss.
     losses = 0
     for real_feat, fake_feat in zip(real_feats, fake_feats):
         l2 = (real_feat.mean(0) - fake_feat.mean(0)) * (real_feat.mean(0) - fake_feat.mean(0))
@@ -108,7 +109,7 @@ def main(args):
     torch.manual_seed(0)
     assert not args.mb_D, 'Mini-batch discrimination not implemented yet'
 
-    modelarch = 'C_{0}_{1}_{2}{3}{4}{5}{6}{7}{8}{9}_{10}{11}{12}'.format(
+    modelarch = 'C_{0}_{1}_{2}{3}{4}{5}{6}{7}{8}{9}_{10}{11}{12}{13}'.format(
         args.size, args.batch_size, args.lr,  # 0, 1, 2
         '_' if args.G_extra or args.D_extra else '',  # 3
         'G' if args.G_extra else '',  # 4
@@ -119,7 +120,8 @@ def main(args):
         '_prop' if args.keep_prop else '',  # 9
         args.img_norm,  # 10
         '_W' if args.wasserstein else '',  # 11
-        '_MBD' if args.mb_D else '')  # 12
+        '_MBD' if args.mb_D else '',  # 12
+        '_FM' if args.fm_loss else '')  # 13
 
     samples_path = os.path.join(args.output_dir, modelarch, 'samples')
     safe_mkdirs(samples_path)
@@ -150,7 +152,7 @@ def main(args):
     criterion_GAN = wasserstein_loss if args.wasserstein else torch.nn.MSELoss()
     criterion_cycle = torch.nn.L1Loss()
     criterion_identity = torch.nn.L1Loss()
-    #feat_criterion = nn.HingeEmbeddingLoss()  # TODO
+    feat_criterion = torch.nn.HingeEmbeddingLoss()
 
     # I could also update D only if iters % 2 == 0
     lr_G = args.lr
@@ -214,6 +216,8 @@ def main(args):
     # Training ######
     iter = 0
     prev_time = time.time()
+    n_test = 10e10 if args.n_test is None else args.n_test
+    n_sample = 10e10 if args.n_sample is None else args.n_sample
 
     #gan_metrics = ConvNetFeatureSaver()
     #csv_fn = os.path.join(args.output_dir, modelarch, modelarch + '.csv')
@@ -270,22 +274,24 @@ def main(args):
             optimizer_D_A.zero_grad()
 
             # Real loss
-            pred_real = netD_A(real_A)
+            pred_real, _ = netD_A(real_A)
             loss_D_real = criterion_GAN(pred_real, target_real)
 
             # Fake loss
             fake_A = fake_A_buffer.push_and_pop(fake_A)
-            pred_fake = netD_A(fake_A.detach())
+            pred_fake, _ = netD_A(fake_A.detach())
             loss_D_fake = criterion_GAN(pred_fake, target_fake)
 
-            #pred_real, feats_real = netD_A(real_A)
-            #pred_fake, feats_fake = netD_A(fake_A.detach())
-
-            #fm_loss = get_fm_loss(feats_real, feats_fake, feat_criterion, args.cuda)
-
-            # Total loss
             loss_D_A = (loss_D_real + loss_D_fake)*0.5
-            #loss_D_A = (loss_D_real + loss_D_fake)*0.5 + fm_loss*0.9  # TODO
+
+            if args.fm_loss:
+                pred_real, feats_real = netD_A(real_A)
+                pred_fake, feats_fake = netD_A(fake_A.detach())
+
+                fm_loss_A = get_fm_loss(feats_real, feats_fake, feat_criterion, args.cuda)
+
+                loss_D_A = loss_D_A * 0.1 + fm_loss_A * 0.9
+
             loss_D_A.backward()
 
             optimizer_D_A.step()
@@ -294,22 +300,24 @@ def main(args):
             optimizer_D_B.zero_grad()
 
             # Real loss
-            pred_real = netD_B(real_B)
+            pred_real, _ = netD_B(real_B)
             loss_D_real = criterion_GAN(pred_real, target_real)
 
             # Fake loss
             fake_B = fake_B_buffer.push_and_pop(fake_B)
-            pred_fake = netD_B(fake_B.detach())
+            pred_fake, _ = netD_B(fake_B.detach())
             loss_D_fake = criterion_GAN(pred_fake, target_fake)
 
-            #pred_real, feats_real = netD_B(real_B)
-            #pred_fake, feats_fake = netD_B(fake_B.detach())
-
-            #fm_loss = get_fm_loss(feats_real, feats_fake, feat_criterion, args.cuda)
-
-            # Total loss
             loss_D_B = (loss_D_real + loss_D_fake)*0.5
-            #loss_D_B = (loss_D_real + loss_D_fake)*0.5 + fm_loss*0.9  # TODO
+
+            if args.fm_loss:
+                pred_real, feats_real = netD_B(real_B)
+                pred_fake, feats_fake = netD_B(fake_B.detach())
+
+                fm_loss_B = get_fm_loss(feats_real, feats_fake, feat_criterion, args.cuda)
+
+                loss_D_B = loss_D_B * 0.1 + fm_loss_B * 0.9
+
             loss_D_B.backward()
 
             optimizer_D_B.step()
@@ -321,6 +329,8 @@ def main(args):
                 print("Identity loss:", as_np(loss_identity_A), as_np(loss_identity_B))
                 print("Cycle loss:", as_np(loss_cycle_ABA), as_np(loss_cycle_BAB))
                 print("D loss:", as_np(loss_D_A), as_np(loss_D_B))
+                if args.fm_loss:
+                    print("fm loss:", as_np(fm_loss_A), as_np(fm_loss_B))
                 print("recon loss rate:", recon_loss_rate)
                 print("time:", time.time() - prev_time)
                 prev_time = time.time()
@@ -366,7 +376,7 @@ def main(args):
                     fake_AB_test = netG_A2B(real_A_test)
                     fake_BA_test = netG_B2A(real_B_test)
 
-                    if j < args.n_test:
+                    if j < n_sample:
                         recovered_ABA_test = netG_B2A(fake_AB_test)
                         recovered_BAB_test = netG_A2B(fake_AB_test)
 
@@ -378,11 +388,12 @@ def main(args):
                         imageio.imwrite(fn + '.ABA.jpg', tensor2image(recovered_ABA_test[0]))
                         imageio.imwrite(fn + '.BAB.jpg', tensor2image(recovered_BAB_test[0]))
 
-                    fn_A = os.path.basename(batch_['img_A'][0])
-                    imageio.imwrite(os.path.join(test_pth_AB, fn_A), tensor2image(fake_AB_test[0]))
+                    if j < n_test:
+                        fn_A = os.path.basename(batch_['img_A'][0])
+                        imageio.imwrite(os.path.join(test_pth_AB, fn_A), tensor2image(fake_AB_test[0]))
 
-                    fn_B = os.path.basename(batch_['img_B'][0])
-                    imageio.imwrite(os.path.join(test_pth_BA, fn_B), tensor2image(fake_BA_test[0]))
+                        fn_B = os.path.basename(batch_['img_B'][0])
+                        imageio.imwrite(os.path.join(test_pth_BA, fn_B), tensor2image(fake_BA_test[0]))
 
             if iter % args.model_save_interval == 0:
                 # Save models checkpoints
