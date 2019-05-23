@@ -250,11 +250,11 @@ def main(args):
 
             # GAN loss
             fake_B = netG_A2B(real_A)
-            pred_fake = netD_B(fake_B)
+            pred_fake, _ = netD_B(fake_B)
             loss_GAN_A2B = criterion_GAN(pred_fake, target_real)
 
             fake_A = netG_B2A(real_B)
-            pred_fake = netD_A(fake_A)
+            pred_fake, _ = netD_A(fake_A)
             loss_GAN_B2A = criterion_GAN(pred_fake, target_real)
 
             # Cycle loss
