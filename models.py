@@ -224,7 +224,7 @@ class Discriminator(nn.Module):
             self.relu3 = nn.LeakyReLU(0.2, inplace=True)
 
         self.conv4 = nn.Conv2d(256, 512, 4, padding=1)
-        self.bn4 = nn.InstanceNorm2d(512)
+        self.in4 = nn.InstanceNorm2d(512)
         self.relu4 = nn.LeakyReLU(0.2, inplace=True)
 
         self.conv5 = nn.Conv2d(512, 1, 4, padding=1)
@@ -239,24 +239,24 @@ class Discriminator(nn.Module):
             relu1 = self.relu1(conv1)
 
             conv2 = self.conv2(relu1)
-            bn2 = self.bn2(conv2)
-            relu2 = self.relu2(bn2)
+            in2 = self.in2(conv2)
+            relu2 = self.relu2(in2)
 
             conv2e = self.conv2e(relu2)
-            bn2e = self.bn2e(conv2e)
-            relu2e = self.relu2e(bn2e)
+            in2e = self.in2e(conv2e)
+            relu2e = self.relu2e(in2e)
 
             conv3 = self.conv3(relu2e)
-            bn3 = self.bn3(conv3)
-            relu3 = self.relu3(bn3)
+            in3 = self.in3(conv3)
+            relu3 = self.relu3(in3)
 
             conv3e = self.conv3e(relu3)
-            bn3e = self.bn3e(conv3e)
-            relu3e = self.relu3e(bn3e)
+            in3e = self.in3e(conv3e)
+            relu3e = self.relu3e(in3e)
 
             conv4 = self.conv4(relu3e)
-            bn4 = self.bn4(conv4)
-            relu4 = self.relu4(bn4)
+            in4 = self.in4(conv4)
+            relu4 = self.relu4(in4)
 
             conv5 = self.conv5(relu4)
 
@@ -267,16 +267,16 @@ class Discriminator(nn.Module):
             relu1 = self.relu1(conv1)
 
             conv2 = self.conv2(relu1)
-            bn2 = self.bn2(conv2)
-            relu2 = self.relu2(bn2)
+            in2 = self.in2(conv2)
+            relu2 = self.relu2(in2)
 
             conv3 = self.conv3(relu2)
-            bn3 = self.bn3(conv3)
-            relu3 = self.relu3(bn3)
+            in3 = self.in3(conv3)
+            relu3 = self.relu3(in3)
 
             conv4 = self.conv4(relu3)
-            bn4 = self.bn4(conv4)
-            relu4 = self.relu4(bn4)
+            in4 = self.in4(conv4)
+            relu4 = self.relu4(in4)
 
             conv5 = self.conv5(relu4)
 
