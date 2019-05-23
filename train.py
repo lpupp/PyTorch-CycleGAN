@@ -46,6 +46,8 @@ parser.add_argument('--output_nc', type=int, default=3, help='number of channels
 parser.add_argument('--cuda', action='store_true', help='use GPU computation')
 parser.add_argument('--n_cpu', type=int, default=8, help='number of cpu threads to use during batch generation')
 
+parser.add_argument('--buffer_size', type=int, default=50, help='Size of replay buffer')
+
 parser.add_argument('--upsample', action='store_true', help='If True: upsample; else: transposed 2D conv')
 parser.add_argument('--keep_prop', action='store_true', help='Keep weights proportional to 3:64 ratio')
 parser.add_argument('--G_extra', action='store_true', help='use extra layers in G')
@@ -75,8 +77,17 @@ def safe_mkdirs(path):
         os.makedirs(path)
 
 
-def tensor2image(tensor):
-    image = 127.5*(as_np(tensor) + 1.0)
+def tensor2image(tensor, img_norm='znorm'):
+    image = as_np(tensor)
+    if img_norm == 'znorm':
+        image = 127.5*(image + 1.0)
+    elif 'scale01' in img_norm:
+        if img_norm == 'scale01flip':
+            image = np.absolute(image - 1.0)
+        image = image * 255
+    else:
+        raise NotImplementedError
+
     return image.astype(np.uint8).transpose(1, 2, 0)
 
 
@@ -109,7 +120,7 @@ def main(args):
     torch.manual_seed(0)
     assert not args.mb_D, 'Mini-batch discrimination not implemented yet'
 
-    modelarch = 'C_{0}_{1}_{2}{3}{4}{5}{6}{7}{8}{9}_{10}{11}{12}{13}'.format(
+    modelarch = 'C_{0}_{1}_{2}{3}{4}{5}{6}{7}{8}{9}_{10}{11}{12}{13}{14}'.format(
         args.size, args.batch_size, args.lr,  # 0, 1, 2
         '_' if args.G_extra or args.D_extra else '',  # 3
         'G' if args.G_extra else '',  # 4
@@ -121,7 +132,8 @@ def main(args):
         args.img_norm,  # 10
         '_W' if args.wasserstein else '',  # 11
         '_MBD' if args.mb_D else '',  # 12
-        '_FM' if args.fm_loss else '')  # 13
+        '_FM' if args.fm_loss else '',  # 13
+        '_BF{}'.format(args.buffer_size) if args.buffer_size != 50 else '')  # 14
 
     samples_path = os.path.join(args.output_dir, modelarch, 'samples')
     safe_mkdirs(samples_path)
@@ -175,8 +187,8 @@ def main(args):
     target_real = Variable(Tensor(args.batch_size).fill_(1.0), requires_grad=False)
     target_fake = Variable(Tensor(args.batch_size).fill_(0.0), requires_grad=False)
 
-    fake_A_buffer = ReplayBuffer()
-    fake_B_buffer = ReplayBuffer()
+    fake_A_buffer = ReplayBuffer(args.buffer_size)
+    fake_B_buffer = ReplayBuffer(args.buffer_size)
 
     # Dataset loader
     transforms_ = []
@@ -381,19 +393,19 @@ def main(args):
                         recovered_BAB_test = netG_A2B(fake_AB_test)
 
                         fn = os.path.join(samples_path_, str(j))
-                        imageio.imwrite(fn + '.A.jpg', tensor2image(real_A_test[0]))
-                        imageio.imwrite(fn + '.B.jpg', tensor2image(real_B_test[0]))
-                        imageio.imwrite(fn + '.BA.jpg', tensor2image(fake_BA_test[0]))
-                        imageio.imwrite(fn + '.AB.jpg', tensor2image(fake_AB_test[0]))
-                        imageio.imwrite(fn + '.ABA.jpg', tensor2image(recovered_ABA_test[0]))
-                        imageio.imwrite(fn + '.BAB.jpg', tensor2image(recovered_BAB_test[0]))
+                        imageio.imwrite(fn + '.A.jpg', tensor2image(real_A_test[0], args.img_norm))
+                        imageio.imwrite(fn + '.B.jpg', tensor2image(real_B_test[0], args.img_norm))
+                        imageio.imwrite(fn + '.BA.jpg', tensor2image(fake_BA_test[0], args.img_norm))
+                        imageio.imwrite(fn + '.AB.jpg', tensor2image(fake_AB_test[0], args.img_norm))
+                        imageio.imwrite(fn + '.ABA.jpg', tensor2image(recovered_ABA_test[0], args.img_norm))
+                        imageio.imwrite(fn + '.BAB.jpg', tensor2image(recovered_BAB_test[0], args.img_norm))
 
                     if j < n_test:
                         fn_A = os.path.basename(batch_['img_A'][0])
-                        imageio.imwrite(os.path.join(test_pth_AB, fn_A), tensor2image(fake_AB_test[0]))
+                        imageio.imwrite(os.path.join(test_pth_AB, fn_A), tensor2image(fake_AB_test[0], args.img_norm))
 
                         fn_B = os.path.basename(batch_['img_B'][0])
-                        imageio.imwrite(os.path.join(test_pth_BA, fn_B), tensor2image(fake_BA_test[0]))
+                        imageio.imwrite(os.path.join(test_pth_BA, fn_B), tensor2image(fake_BA_test[0], args.img_norm))
 
             if iter % args.model_save_interval == 0:
                 # Save models checkpoints
