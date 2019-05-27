@@ -166,7 +166,7 @@ class Generator(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, input_nc, extra_layer=False, mb_D=False):
+    def __init__(self, input_nc, extra_layer=False, mb_D=False, x_size=None):
         super(Discriminator, self).__init__()
 
         # # A bunch of convolutions one after another
@@ -201,6 +201,11 @@ class Discriminator(nn.Module):
         # self.model = nn.Sequential(*model)
 
         self.extra_layer = extra_layer
+        self.mb_D = mb_D
+        if self.mb_D:
+            assert x_size is not None, 'provide x_dim when mb_D True'
+            self.x_size = x_size
+
         # A bunch of convolutions one after another
         self.conv1 = nn.Conv2d(input_nc, 64, 4, stride=2, padding=1)
         self.relu1 = nn.LeakyReLU(0.2, inplace=True)
@@ -227,12 +232,16 @@ class Discriminator(nn.Module):
         self.in4 = nn.InstanceNorm2d(512)
         self.relu4 = nn.LeakyReLU(0.2, inplace=True)
 
-        self.conv5 = nn.Conv2d(512, 1, 4, padding=1)
+        if self.mb_D:
+            self.mb = MinibatchDiscrimination(int(x_size/8), 512, 512)
+            self.dense = nn.Linear(512, 1)
+        else:
+            self.conv5 = nn.Conv2d(512, 1, 4, padding=1)
 
     def forward(self, x):
         # x = self.model(x)
         # # Average pooling and flatten
-        # return F.avg_pool2d(x, x.size()[2:]).view(x.size()[0], -1)
+        # return F.avg_pool2d(x, x.size()[2:]).view(x.size()[0], -1)  # return flattened avg_pool2d
 
         if self.extra_layer:
             conv1 = self.conv1(x)
@@ -258,8 +267,6 @@ class Discriminator(nn.Module):
             in4 = self.in4(conv4)
             relu4 = self.relu4(in4)
 
-            conv5 = self.conv5(relu4)
-
             relus = [relu2, relu2e, relu3, relu3e, relu4]
 
         else:
@@ -278,8 +285,15 @@ class Discriminator(nn.Module):
             in4 = self.in4(conv4)
             relu4 = self.relu4(in4)
 
-            conv5 = self.conv5(relu4)
-
             relus = [relu2, relu3, relu4]
 
-        return torch.sigmoid(conv5), relus
+        if self.mb_D:
+            relu4_flat = relu4.view(relu4.size(0), -1)
+            mb = self.mb(relu4_flat)
+            dense = self.dense(mb)
+            out = torch.sigmoid(dense)
+        else:
+            conv5 = self.conv5(relu4)
+            out = F.avg_pool2d(conv5, conv5.size()[2:]).view(conv5.size(0), -1)
+
+        return out, relus

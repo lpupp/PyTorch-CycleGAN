@@ -118,7 +118,7 @@ def wasserstein_loss(prediction, target_is_real):
 
 def main(args):
     torch.manual_seed(0)
-    assert not args.mb_D, 'Mini-batch discrimination not implemented yet'
+    assert args.mb_D and args.batch_size > 1, 'batch size needs to be larger than 1 if mb_D'
 
     modelarch = 'C_{0}_{1}_{2}{3}{4}{5}{6}{7}{8}{9}_{10}{11}{12}{13}{14}'.format(
         args.size, args.batch_size, args.lr,  # 0, 1, 2
@@ -146,8 +146,8 @@ def main(args):
     # Networks
     netG_A2B = Generator(args.input_nc, args.output_nc, img_size=args.size, extra_layer=args.G_extra, upsample=args.upsample, keep_weights_proportional=args.keep_prop)
     netG_B2A = Generator(args.output_nc, args.input_nc, img_size=args.size, extra_layer=args.G_extra, upsample=args.upsample, keep_weights_proportional=args.keep_prop)
-    netD_A = Discriminator(args.input_nc, extra_layer=args.D_extra)
-    netD_B = Discriminator(args.output_nc, extra_layer=args.D_extra)
+    netD_A = Discriminator(args.input_nc, extra_layer=args.D_extra, mb_D=args.mb_D, x_size=args.size)
+    netD_B = Discriminator(args.output_nc, extra_layer=args.D_extra, mb_D=args.mb_D, x_size=args.size)
 
     if args.cuda:
         netG_A2B.cuda()
