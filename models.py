@@ -232,8 +232,9 @@ class Discriminator(nn.Module):
         self.relu4 = nn.LeakyReLU(0.2, inplace=True)
 
         if self.mb_D:
-            self.mb = MinibatchDiscrimination(((int(x_size/8)-1)**2) * 512, 512, 64)
-            self.dense = nn.Linear(512, 1)
+            flat_dim = ((int(x_size/8)-1)**2) * 512
+            self.mb = MinibatchDiscrimination(flat_dim, 512, 64)
+            self.dense = nn.Linear(512 + flat_dim, 1)
         else:
             self.conv5 = nn.Conv2d(512, 1, 4, padding=1)
 
