@@ -118,7 +118,8 @@ def wasserstein_loss(prediction, target_is_real):
 
 def main(args):
     torch.manual_seed(0)
-    assert args.mb_D and args.batch_size > 1, 'batch size needs to be larger than 1 if mb_D'
+    if args.mb_D:
+        assert args.batch_size > 1, 'batch size needs to be larger than 1 if mb_D'
 
     modelarch = 'C_{0}_{1}_{2}{3}{4}{5}{6}{7}{8}{9}_{10}{11}{12}{13}{14}'.format(
         args.size, args.batch_size, args.lr,  # 0, 1, 2
