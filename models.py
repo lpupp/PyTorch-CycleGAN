@@ -17,7 +17,7 @@ class MinibatchDiscrimination(nn.Module):
         self.kernel_dims = kernel_dims
         self.mean = mean
         self.T = nn.Parameter(torch.Tensor(in_features, out_features, kernel_dims))
-        init.normal(self.T, 0, 1)
+        init.normal_(self.T)
 
     def forward(self, x):
         # x is NxA
@@ -204,7 +204,6 @@ class Discriminator(nn.Module):
         self.mb_D = mb_D
         if self.mb_D:
             assert x_size is not None, 'provide x_dim when mb_D True'
-            self.x_size = x_size
 
         # A bunch of convolutions one after another
         self.conv1 = nn.Conv2d(input_nc, 64, 4, stride=2, padding=1)
@@ -233,7 +232,7 @@ class Discriminator(nn.Module):
         self.relu4 = nn.LeakyReLU(0.2, inplace=True)
 
         if self.mb_D:
-            self.mb = MinibatchDiscrimination(int(x_size/8), 512, 512)
+            self.mb = MinibatchDiscrimination(((int(x_size/8)-1)**2) * 512, 512, 64)
             self.dense = nn.Linear(512, 1)
         else:
             self.conv5 = nn.Conv2d(512, 1, 4, padding=1)
