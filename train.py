@@ -53,11 +53,18 @@ parser.add_argument('--keep_prop', action='store_true', help='Keep weights propo
 parser.add_argument('--G_extra', action='store_true', help='use extra layers in G')
 parser.add_argument('--D_extra', action='store_true', help='use extra layers in D')
 parser.add_argument('--slow_D', action='store_true', help='Slow the training of D to avoid mode collapse')
-parser.add_argument('--recon_loss_acay', action='store_true', help='increase relative importance of recon loss')
-parser.add_argument('--recon_acay_rate', type=float, default=2.0, help='increase relative importance of recon loss (rate)')
 parser.add_argument('--wasserstein', action='store_true', help='use wasserstein loss for D')
 parser.add_argument('--mb_D', action='store_true', help='Mini-batch discrimination')
 parser.add_argument('--fm_loss', action='store_true', help='Feature matching loss')
+parser.add_argument('--add_noise', action='store_true', help='Add noise to training images when loading')
+
+parser.add_argument('--recon_loss_epoch', type=int, default=100, help='epoch to start linearly adapting recon loss weight')
+parser.add_argument('--start_recon_loss_val', type=float, default=10.0, help='starting weight of recon loss (cycleGAN default = 10.0)')
+parser.add_argument('--end_recon_loss_val', type=float, default=10.0, help='end weight of recon loss (cycleGAN default = 10.0)')
+
+parser.add_argument('--gan_loss_epoch', type=int, default=100, help='epoch to start linearly adapting recon loss weight')
+parser.add_argument('--start_gan_loss_val', type=float, default=1.0, help='starting weight of gan loss (cycleGAN default = 1.0)')
+parser.add_argument('--end_gan_loss_val', type=float, default=1.0, help='end weight of gan loss (cycleGAN default = 1.0)')
 
 parser.add_argument('--img_norm', type=str, default='znorm', help='How to normalize images: znorm|scale01|scale01flip')
 
@@ -110,7 +117,7 @@ def get_fm_loss(real_feats, fake_feats, criterion, cuda):
 
 def wasserstein_loss(prediction, target_is_real):
     if target_is_real:
-        loss = -prediction.mean()
+        loss = - prediction.mean()
     else:
         loss = prediction.mean()
     return loss
@@ -119,22 +126,27 @@ def wasserstein_loss(prediction, target_is_real):
 def main(args):
     torch.manual_seed(0)
     if args.mb_D:
+        raise NotImplementedError('mb_D not implemented')
         assert args.batch_size > 1, 'batch size needs to be larger than 1 if mb_D'
 
-    modelarch = 'C_{0}_{1}_{2}{3}{4}{5}{6}{7}{8}{9}_{10}{11}{12}{13}{14}'.format(
+    if args.img_norm == 'znorm':
+        raise NotImplementedError('{} not implemented'.format(args.img_norm))
+
+    modelarch = 'C_{0}_{1}_{2}{3}{4}{5}{6}{7}{8}{9}{10}{11}{12}{13}{14}{15}'.format(
         args.size, args.batch_size, args.lr,  # 0, 1, 2
-        '_' if args.G_extra or args.D_extra else '',  # 3
-        'G' if args.G_extra else '',  # 4
-        'D' if args.D_extra else '',  # 5
-        '_U' if args.upsample else '',  # 6
-        '_S' if args.slow_D else '',  # 7
-        '_RL{}'.format(args.recon_acay_rate) if args.recon_loss_acay else '',  # 8
+        '_G' if args.G_extra else '',  # 3
+        '_D' if args.D_extra else '',  # 4
+        '_U' if args.upsample else '',  # 5
+        '_S' if args.slow_D else '',  # 6
+        '_RL{}-{}'.format(args.start_recon_loss_val, args.start_recon_loss_val),  # 7
+        '_GL{}-{}'.format(args.start_gan_loss_val, args.start_gan_loss_val),  # 8
         '_prop' if args.keep_prop else '',  # 9
-        args.img_norm,  # 10
-        '_W' if args.wasserstein else '',  # 11
+        '_' + args.img_norm,  # 10
+        '_WL' if args.wasserstein else '',  # 11
         '_MBD' if args.mb_D else '',  # 12
         '_FM' if args.fm_loss else '',  # 13
-        '_BF{}'.format(args.buffer_size) if args.buffer_size != 50 else '')  # 14
+        '_BF{}'.format(args.buffer_size) if args.buffer_size != 50 else '',  # 14
+        '_N' if args.add_noise else '')  # 15
 
     samples_path = os.path.join(args.output_dir, modelarch, 'samples')
     safe_mkdirs(samples_path)
@@ -191,9 +203,8 @@ def main(args):
     fake_A_buffer = ReplayBuffer(args.buffer_size)
     fake_B_buffer = ReplayBuffer(args.buffer_size)
 
-    # Dataset loader
+    # Transforms and dataloader for training set
     transforms_ = []
-
     if args.resize_crop:
         transforms_ += [transforms.Resize(int(args.size*1.12), Image.BICUBIC),
                         transforms.RandomCrop(args.size)]
@@ -204,6 +215,9 @@ def main(args):
         transforms_ += [transforms.RandomHorizontalFlip()]
 
     transforms_ += [transforms.ToTensor()]
+
+    if args.add_noise:
+        transforms_ += [transforms.Lambda(lambda x: x + torch.randn_like(x))]
 
     transforms_norm = []
     if args.img_norm == 'znorm':
@@ -220,6 +234,7 @@ def main(args):
     dataloader = DataLoader(ImageDataset(args.dataroot, transforms_=transforms_, unaligned=True),
                             batch_size=args.batch_size, shuffle=True, num_workers=args.n_cpu)
 
+    # Transforms and dataloader for test set
     transforms_test_ = [transforms.Resize(args.size, Image.BICUBIC),
                         transforms.ToTensor()]
     transforms_test_ += transforms_norm
@@ -235,15 +250,21 @@ def main(args):
     #gan_metrics = ConvNetFeatureSaver()
     #csv_fn = os.path.join(args.output_dir, modelarch, modelarch + '.csv')
 
-    recon_loss_acay_trigger = int(args.decay_epoch * 0.5)
+    rl_delta_x = args.n_epochs - args.recon_loss_epoch
+    rl_delta_y = args.end_recon_loss_val - args.start_recon_loss_val
+
+    gan_delta_x = args.n_epochs - args.gan_loss_epoch
+    gan_delta_y = args.end_gan_loss_val - args.start_gan_loss_val
+
     for epoch in range(args.load_iter, args.n_epochs):
 
-        recon_loss_rate = 1.0
-        if args.recon_loss_acay:
-            if epoch > recon_loss_acay_trigger:
-                effective_epoch = (epoch - recon_loss_acay_trigger)
-                # the recon_loss_rate maxes out before n_epoch (because of "- args.decay_epoch")
-                recon_loss_rate = 1.0 + (effective_epoch/(args.n_epochs - args.decay_epoch)) * (args.recon_acay_rate - 1)
+        rl_effective_epoch = max(epoch - args.recon_loss_epoch, 0)
+        recon_loss_rate = args.start_recon_loss_rate + rl_effective_epoch * (rl_delta_y / rl_delta_x)
+
+        gan_effective_epoch = max(epoch - args.gan_loss_epoch, 0)
+        gan_loss_rate = args.start_recon_loss_rate + gan_effective_epoch * (gan_delta_y / gan_delta_x)
+
+        id_loss_rate = 5.0
 
         for i, batch in enumerate(dataloader):
             # Set model input
@@ -256,10 +277,10 @@ def main(args):
             # Identity loss
             # G_A2B(B) should equal B if real B is fed
             same_B = netG_A2B(real_B)
-            loss_identity_B = criterion_identity(same_B, real_B) * 5.0
+            loss_identity_B = criterion_identity(same_B, real_B)
             # G_B2A(A) should equal A if real A is fed
             same_A = netG_B2A(real_A)
-            loss_identity_A = criterion_identity(same_A, real_A) * 5.0
+            loss_identity_A = criterion_identity(same_A, real_A)
 
             # GAN loss
             fake_B = netG_A2B(real_A)
@@ -272,13 +293,16 @@ def main(args):
 
             # Cycle loss
             recovered_A = netG_B2A(fake_B)
-            loss_cycle_ABA = criterion_cycle(recovered_A, real_A) * 10.0
+            loss_cycle_ABA = criterion_cycle(recovered_A, real_A)
 
             recovered_B = netG_A2B(fake_A)
-            loss_cycle_BAB = criterion_cycle(recovered_B, real_B) * 10.0
+            loss_cycle_BAB = criterion_cycle(recovered_B, real_B)
 
             # Total loss
-            loss_G = loss_identity_A + loss_identity_B + loss_GAN_A2B + loss_GAN_B2A + (loss_cycle_ABA + loss_cycle_BAB) * recon_loss_rate
+            loss_G = (loss_identity_A + loss_identity_B) * id_loss_rate
+            loss_G += (loss_GAN_A2B + loss_GAN_B2A) * gan_loss_rate
+            loss_G += (loss_cycle_ABA + loss_cycle_BAB) * recon_loss_rate
+
             loss_G.backward()
 
             optimizer_G.step()
@@ -295,7 +319,7 @@ def main(args):
             pred_fake, _ = netD_A(fake_A.detach())
             loss_D_fake = criterion_GAN(pred_fake, target_fake)
 
-            loss_D_A = (loss_D_real + loss_D_fake)*0.5
+            loss_D_A = (loss_D_real + loss_D_fake) * 0.5
 
             if args.fm_loss:
                 pred_real, feats_real = netD_A(real_A)
@@ -337,15 +361,15 @@ def main(args):
 
             if iter % args.log_interval == 0:
 
-                print("---------------------")
-                print("GAN loss:", as_np(loss_GAN_A2B), as_np(loss_GAN_B2A))
-                print("Identity loss:", as_np(loss_identity_A), as_np(loss_identity_B))
-                print("Cycle loss:", as_np(loss_cycle_ABA), as_np(loss_cycle_BAB))
-                print("D loss:", as_np(loss_D_A), as_np(loss_D_B))
+                print('---------------------')
+                print('GAN loss:', as_np(loss_GAN_A2B), as_np(loss_GAN_B2A))
+                print('Identity loss:', as_np(loss_identity_A), as_np(loss_identity_B))
+                print('Cycle loss:', as_np(loss_cycle_ABA), as_np(loss_cycle_BAB))
+                print('D loss:', as_np(loss_D_A), as_np(loss_D_B))
                 if args.fm_loss:
-                    print("fm loss:", as_np(fm_loss_A), as_np(fm_loss_B))
-                print("recon loss rate:", recon_loss_rate)
-                print("time:", time.time() - prev_time)
+                    print('fm loss:', as_np(fm_loss_A), as_np(fm_loss_B))
+                print('recon loss rate:', recon_loss_rate)
+                print('time:', time.time() - prev_time)
                 prev_time = time.time()
 
             if iter % args.plot_interval == 0:
@@ -423,7 +447,7 @@ def main(args):
         lr_scheduler_D_B.step()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     global args
     args = parser.parse_args()
     print(args)
