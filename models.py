@@ -223,9 +223,9 @@ class Discriminator(nn.Module):
         self.relu3 = nn.LeakyReLU(0.2, inplace=True)
 
         if self.extra_layer:
-            self.conv3 = nn.Conv2d(256, 256, 3, padding=1)
-            self.in3 = nn.InstanceNorm2d(256)
-            self.relu3 = nn.LeakyReLU(0.2, inplace=True)
+            self.conv3e = nn.Conv2d(256, 256, 3, padding=1)
+            self.in3e = nn.InstanceNorm2d(256)
+            self.relu3e = nn.LeakyReLU(0.2, inplace=True)
 
         self.conv4 = nn.Conv2d(256, 512, 4, padding=1)
         self.in4 = nn.InstanceNorm2d(512)
