@@ -259,10 +259,10 @@ def main(args):
     for epoch in range(args.load_iter, args.n_epochs):
 
         rl_effective_epoch = max(epoch - args.recon_loss_epoch, 0)
-        recon_loss_rate = args.start_recon_loss_rate + rl_effective_epoch * (rl_delta_y / rl_delta_x)
+        recon_loss_rate = args.start_recon_loss_val + rl_effective_epoch * (rl_delta_y / rl_delta_x)
 
         gan_effective_epoch = max(epoch - args.gan_loss_epoch, 0)
-        gan_loss_rate = args.start_recon_loss_rate + gan_effective_epoch * (gan_delta_y / gan_delta_x)
+        gan_loss_rate = args.start_gan_loss_val + gan_effective_epoch * (gan_delta_y / gan_delta_x)
 
         id_loss_rate = 5.0
 
