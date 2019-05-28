@@ -129,7 +129,7 @@ def main(args):
         raise NotImplementedError('mb_D not implemented')
         assert args.batch_size > 1, 'batch size needs to be larger than 1 if mb_D'
 
-    if args.img_norm == 'znorm':
+    if args.img_norm != 'znorm':
         raise NotImplementedError('{} not implemented'.format(args.img_norm))
 
     modelarch = 'C_{0}_{1}_{2}{3}{4}{5}{6}{7}{8}{9}{10}{11}{12}{13}{14}{15}'.format(
