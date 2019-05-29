@@ -72,12 +72,13 @@ parser.add_argument('--horizontal_flip', action='store_true', help='augment data
 parser.add_argument('--resize_crop', action='store_true', help='augment reading in image too large and cropping')
 
 parser.add_argument('--output_dir', type=str, default='data/output/fashion/shoes2dresses', help='output directory')
+parser.add_argument('--load_dir', type=str, default=None, help='Dir to load G and D from (without iteration number)')
+
 parser.add_argument('--score_interval', type=int, default=50, help='Calculate out-of-sample scores every score_interval iterations.')
 parser.add_argument('--log_interval', type=int, default=50, help='Print loss values every log_interval iterations.')
 parser.add_argument('--plot_interval', type=int, default=50, help='Print loss values every plot_interval iterations.')
 parser.add_argument('--image_save_interval', type=int, default=1000, help='Save test results every image_save_interval iterations.')
 parser.add_argument('--model_save_interval', type=int, default=1000, help='Save models every model_save_interval iterations.')
-
 
 def safe_mkdirs(path):
     if not os.path.exists(path):
@@ -132,7 +133,7 @@ def main(args):
     if args.img_norm != 'znorm':
         raise NotImplementedError('{} not implemented'.format(args.img_norm))
 
-    modelarch = 'C_{0}_{1}_{2}{3}{4}{5}{6}{7}{8}{9}{10}{11}{12}{13}{14}{15}'.format(
+    modelarch = 'C_{0}_{1}_{2}{3}{4}{5}{6}{7}{8}{9}{10}{11}{12}{13}{14}{15}{16}'.format(
         args.size, args.batch_size, args.lr,  # 0, 1, 2
         '_G' if args.G_extra else '',  # 3
         '_D' if args.D_extra else '',  # 4
@@ -146,7 +147,8 @@ def main(args):
         '_MBD' if args.mb_D else '',  # 12
         '_FM' if args.fm_loss else '',  # 13
         '_BF{}'.format(args.buffer_size) if args.buffer_size != 50 else '',  # 14
-        '_N' if args.add_noise else '')  # 15
+        '_N' if args.add_noise else '',  # 15
+        '_L{}'.format(args.load_iter) if args.load_iter > 0 else '')  # 16
 
     samples_path = os.path.join(args.output_dir, modelarch, 'samples')
     safe_mkdirs(samples_path)
@@ -168,10 +170,21 @@ def main(args):
         netD_A.cuda()
         netD_B.cuda()
 
-    netG_A2B.apply(weights_init_normal)
-    netG_B2A.apply(weights_init_normal)
-    netD_A.apply(weights_init_normal)
-    netD_B.apply(weights_init_normal)
+    if args.load_iter == 0:
+        netG_A2B.apply(weights_init_normal)
+        netG_B2A.apply(weights_init_normal)
+        netD_A.apply(weights_init_normal)
+        netD_B.apply(weights_init_normal)
+    else:
+        netG_A2B.load_state_dict(torch.load(os.path.join(args.load_dir, 'G_A2B_{}.pth'.format(float(args.load_iter)))))
+        netG_B2A.load_state_dict(torch.load(os.path.join(args.load_dir, 'G_B2A_{}.pth'.format(float(args.load_iter)))))
+        netD_A.load_state_dict(torch.load(os.path.join(args.load_dir, 'D_A_{}.pth'.format(float(args.load_iter)))))
+        netD_B.load_state_dict(torch.load(os.path.join(args.load_dir, 'D_B_{}.pth'.format(float(args.load_iter)))))
+
+        netG_A2B.train()
+        netG_B2A.train()
+        netD_A.train()
+        netD_B.train()
 
     # Lossess
     criterion_GAN = wasserstein_loss if args.wasserstein else torch.nn.MSELoss()
