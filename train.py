@@ -117,7 +117,7 @@ def get_fm_loss(real_feats, fake_feats, criterion, cuda):
 
 def wasserstein_loss(prediction, target_is_real):
     if target_is_real:
-        loss = - prediction.mean()
+        loss = -prediction.mean()
     else:
         loss = prediction.mean()
     return loss
@@ -223,9 +223,9 @@ def main(args):
     if args.img_norm == 'znorm':
         transforms_norm += [transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
     elif 'scale01' in args.img_norm:
-        transforms_norm += [transforms.Lambda(lambda x: x.mul(1/255))]
+        transforms_norm += [transforms.Lambda(lambda x: x.mul(1/255))]  # TODO this might not preserve the dimensions. is .mul per element?
         if 'flip' in args.img_norm:
-            transforms_norm += [transforms.Lambda(lambda x: (x - 1).abs())]
+            transforms_norm += [transforms.Lambda(lambda x: (x - 1).abs())]  # TODO this might not preserve the dimensions. is .mul per element?
     else:
         raise ValueError('wrong --img_norm. only znorm|scale01|scale01flip')
 
@@ -415,7 +415,7 @@ def main(args):
 
                     if j < n_sample:
                         recovered_ABA_test = netG_B2A(fake_AB_test)
-                        recovered_BAB_test = netG_A2B(fake_AB_test)
+                        recovered_BAB_test = netG_A2B(fake_BA_test)
 
                         fn = os.path.join(samples_path_, str(j))
                         imageio.imwrite(fn + '.A.jpg', tensor2image(real_A_test[0], args.img_norm))

@@ -167,6 +167,21 @@ class Generator(nn.Module):
 
 class Discriminator(nn.Module):
     def __init__(self, input_nc, extra_layer=False, mb_D=False, x_size=None):
+        """Initialize discriminator.
+
+        shape:
+            KEY: b: batch size; c: n channels; n: w, h of square image.
+            input:      b x   c x       n x       n
+            conv1:      b x  64 x     n/2 x     n/2
+            conv2:      b x 128 x     n/4 x     n/4
+            conv2e:     b x 128 x     n/4 x     n/4
+            conv3:      b x 256 x     n/8 x     n/8
+            conv3e:     b x 256 x     n/8 x     n/8
+            conv4:      b x 512 x n/8 - 1 x n/8 - 1
+            conv4e:     b x 512 x n/8 - 1 x n/8 - 1
+            conv5:      b x   1 x n/8 - 2 x n/8 - 2
+            avg_pool2d: b x   1
+        """
         super(Discriminator, self).__init__()
 
         # # A bunch of convolutions one after another
