@@ -31,7 +31,9 @@ from datasets import ImageDataset
 #from eval_score import ConvNetFeatureSaver
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--load_iter', type=int, default=0, help='starting epoch')
+parser.add_argument('--load_iter', type=int, default=0, help='starting iteration')
+parser.add_argument('--load_epoch', type=int, default=0, help='starting epoch (if load_iter != 0)')
+
 parser.add_argument('--n_epochs', type=int, default=200, help='number of epochs of training')
 parser.add_argument('--n_test', type=int, default=None, help='number of test samples to spit out')
 parser.add_argument('--n_sample', type=int, default=60, help='number ofsample samples to spit out')
@@ -176,10 +178,10 @@ def main(args):
         netD_A.apply(weights_init_normal)
         netD_B.apply(weights_init_normal)
     else:
-        netG_A2B.load_state_dict(torch.load(os.path.join(args.load_dir, 'G_A2B_{}.pth'.format(float(args.load_iter)))))
-        netG_B2A.load_state_dict(torch.load(os.path.join(args.load_dir, 'G_B2A_{}.pth'.format(float(args.load_iter)))))
-        netD_A.load_state_dict(torch.load(os.path.join(args.load_dir, 'D_A_{}.pth'.format(float(args.load_iter)))))
-        netD_B.load_state_dict(torch.load(os.path.join(args.load_dir, 'D_B_{}.pth'.format(float(args.load_iter)))))
+        netG_A2B.load_state_dict(torch.load(os.path.join(args.load_dir, 'models', 'G_A2B_{}.pth'.format(int(args.load_iter * 1000)))))
+        netG_B2A.load_state_dict(torch.load(os.path.join(args.load_dir, 'models', 'G_B2A_{}.pth'.format(int(args.load_iter * 1000)))))
+        netD_A.load_state_dict(torch.load(os.path.join(args.load_dir, 'models', 'D_A_{}.pth'.format(int(args.load_iter * 1000)))))
+        netD_B.load_state_dict(torch.load(os.path.join(args.load_dir, 'models', 'D_B_{}.pth'.format(int(args.load_iter * 1000)))))
 
         netG_A2B.train()
         netG_B2A.train()
@@ -255,7 +257,10 @@ def main(args):
     dataloader_test = DataLoader(ImageDataset(args.dataroot, transforms_=transforms_test_, mode='test'),
                                  batch_size=args.batch_size, shuffle=False, num_workers=args.n_cpu)
     # Training ######
-    iter = 0
+    if args.load_iter == 0 and args.load_epoch != 0:
+        print('****** NOTE: args.load_iter == 0 and args.load_epoch != 0 ******')
+
+    iter = args.load_iter
     prev_time = time.time()
     n_test = 10e10 if args.n_test is None else args.n_test
     n_sample = 10e10 if args.n_sample is None else args.n_sample
@@ -269,7 +274,7 @@ def main(args):
     gan_delta_x = args.n_epochs - args.gan_loss_epoch
     gan_delta_y = args.end_gan_loss_val - args.start_gan_loss_val
 
-    for epoch in range(args.load_iter, args.n_epochs):
+    for epoch in range(args.load_epoch, args.n_epochs):
 
         rl_effective_epoch = max(epoch - args.recon_loss_epoch, 0)
         recon_loss_rate = args.start_recon_loss_val + rl_effective_epoch * (rl_delta_y / rl_delta_x)
