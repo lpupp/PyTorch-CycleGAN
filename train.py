@@ -49,6 +49,7 @@ parser.add_argument('--cuda', action='store_true', help='use GPU computation')
 parser.add_argument('--n_cpu', type=int, default=8, help='number of cpu threads to use during batch generation')
 
 parser.add_argument('--buffer_size', type=int, default=50, help='Size of replay buffer')
+parser.add_argument('--n_resnet_blocks', type=int, default=9, help='Number of resnet blocks in generator')
 
 parser.add_argument('--upsample', action='store_true', help='If True: upsample; else: transposed 2D conv')
 parser.add_argument('--keep_prop', action='store_true', help='Keep weights proportional to 3:64 ratio')
@@ -161,8 +162,14 @@ def main(args):
 
     # Definition of variables ######
     # Networks
-    netG_A2B = Generator(args.input_nc, args.output_nc, img_size=args.size, extra_layer=args.G_extra, upsample=args.upsample, keep_weights_proportional=args.keep_prop)
-    netG_B2A = Generator(args.output_nc, args.input_nc, img_size=args.size, extra_layer=args.G_extra, upsample=args.upsample, keep_weights_proportional=args.keep_prop)
+    netG_A2B = Generator(args.input_nc, args.output_nc, img_size=args.size,
+                         extra_layer=args.G_extra, upsample=args.upsample,
+                         keep_weights_proportional=args.keep_prop,
+                         n_residual_blocks=args.n_resnet_blocks)
+    netG_B2A = Generator(args.output_nc, args.input_nc, img_size=args.size,
+                         extra_layer=args.G_extra, upsample=args.upsample,
+                         keep_weights_proportional=args.keep_prop,
+                         n_residual_blocks=args.n_resnet_blocks)
     netD_A = Discriminator(args.input_nc, extra_layer=args.D_extra, mb_D=args.mb_D, x_size=args.size)
     netD_B = Discriminator(args.output_nc, extra_layer=args.D_extra, mb_D=args.mb_D, x_size=args.size)
 
