@@ -83,6 +83,7 @@ parser.add_argument('--plot_interval', type=int, default=50, help='Print loss va
 parser.add_argument('--image_save_interval', type=int, default=1000, help='Save test results every image_save_interval iterations.')
 parser.add_argument('--model_save_interval', type=int, default=1000, help='Save models every model_save_interval iterations.')
 
+
 def safe_mkdirs(path):
     if not os.path.exists(path):
         os.makedirs(path)
@@ -136,7 +137,7 @@ def main(args):
     if args.img_norm != 'znorm':
         raise NotImplementedError('{} not implemented'.format(args.img_norm))
 
-    modelarch = 'C_{0}_{1}_{2}{3}{4}{5}{6}{7}{8}{9}{10}{11}{12}{13}{14}{15}{16}'.format(
+    modelarch = 'C_{0}_{1}_{2}{3}{4}{5}{6}{7}{8}{9}{10}{11}{12}{13}{14}{15}{16}{17}'.format(
         args.size, args.batch_size, args.lr,  # 0, 1, 2
         '_G' if args.G_extra else '',  # 3
         '_D' if args.D_extra else '',  # 4
@@ -151,7 +152,8 @@ def main(args):
         '_FM' if args.fm_loss else '',  # 13
         '_BF{}'.format(args.buffer_size) if args.buffer_size != 50 else '',  # 14
         '_N' if args.add_noise else '',  # 15
-        '_L{}'.format(args.load_iter) if args.load_iter > 0 else '')  # 16
+        '_L{}'.format(args.load_iter) if args.load_iter > 0 else '',  # 16
+        '_res{}'.format(args.n_resnet_blocks))  # 17
 
     samples_path = os.path.join(args.output_dir, modelarch, 'samples')
     safe_mkdirs(samples_path)
