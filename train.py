@@ -137,23 +137,23 @@ def main(args):
     if args.img_norm != 'znorm':
         raise NotImplementedError('{} not implemented'.format(args.img_norm))
 
-    modelarch = 'C_{0}_{1}_{2}{3}{4}{5}{6}{7}{8}{9}{10}{11}{12}{13}{14}{15}{16}{17}'.format(
-        args.size, args.batch_size, args.lr,  # 0, 1, 2
-        '_G' if args.G_extra else '',  # 3
-        '_D' if args.D_extra else '',  # 4
-        '_U' if args.upsample else '',  # 5
-        '_S' if args.slow_D else '',  # 6
-        '_RL{}-{}'.format(args.start_recon_loss_val, args.start_recon_loss_val),  # 7
-        '_GL{}-{}'.format(args.start_gan_loss_val, args.start_gan_loss_val),  # 8
-        '_prop' if args.keep_prop else '',  # 9
-        '_' + args.img_norm,  # 10
-        '_WL' if args.wasserstein else '',  # 11
-        '_MBD' if args.mb_D else '',  # 12
-        '_FM' if args.fm_loss else '',  # 13
-        '_BF{}'.format(args.buffer_size) if args.buffer_size != 50 else '',  # 14
-        '_N' if args.add_noise else '',  # 15
-        '_L{}'.format(args.load_iter) if args.load_iter > 0 else '',  # 16
-        '_res{}'.format(args.n_resnet_blocks))  # 17
+    modelarch = 'C_{0}_{1}_{2}_{3}_{4}{5}{6}{7}{8}{9}{10}{11}{12}{13}{14}{15}{16}{17}{18}{19}'.format(
+        args.size, args.batch_size, args.lr,  args.n_epochs, args.decay_epoch, # 0, 1, 2, 3, 4
+        '_G' if args.G_extra else '',  # 5
+        '_D' if args.D_extra else '',  # 6
+        '_U' if args.upsample else '',  # 7
+        '_S' if args.slow_D else '',  # 8
+        '_RL{}-{}'.format(args.start_recon_loss_val, args.start_recon_loss_val),  # 9
+        '_GL{}-{}'.format(args.start_gan_loss_val, args.start_gan_loss_val),  # 10
+        '_prop' if args.keep_prop else '',  # 11
+        '_' + args.img_norm,  # 12
+        '_WL' if args.wasserstein else '',  # 13
+        '_MBD' if args.mb_D else '',  # 14
+        '_FM' if args.fm_loss else '',  # 15
+        '_BF{}'.format(args.buffer_size) if args.buffer_size != 50 else '',  # 16
+        '_N' if args.add_noise else '',  # 17
+        '_L{}'.format(args.load_iter) if args.load_iter > 0 else '',  # 18
+        '_res{}'.format(args.n_resnet_blocks))  # 19
 
     samples_path = os.path.join(args.output_dir, modelarch, 'samples')
     safe_mkdirs(samples_path)
