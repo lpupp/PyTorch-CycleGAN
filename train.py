@@ -28,8 +28,6 @@ from models import Generator, Discriminator
 from utils import ReplayBuffer, LambdaLR, weights_init_normal  # , Logger
 from datasets import ImageDataset
 
-#from eval_score import ConvNetFeatureSaver
-
 parser = argparse.ArgumentParser()
 parser.add_argument('--load_iter', type=int, default=0, help='starting iteration')
 parser.add_argument('--load_epoch', type=int, default=0, help='starting epoch (if load_iter != 0)')
@@ -274,9 +272,6 @@ def main(args):
     n_test = 10e10 if args.n_test is None else args.n_test
     n_sample = 10e10 if args.n_sample is None else args.n_sample
 
-    #gan_metrics = ConvNetFeatureSaver()
-    #csv_fn = os.path.join(args.output_dir, modelarch, modelarch + '.csv')
-
     rl_delta_x = args.n_epochs - args.recon_loss_epoch
     rl_delta_y = args.end_recon_loss_val - args.start_recon_loss_val
 
@@ -401,25 +396,6 @@ def main(args):
 
             if iter % args.plot_interval == 0:
                 pass
-
-            if iter % args.score_interval == 0:
-                pass
-                # print('Calculating score')
-                #
-                # for j, batch_ in enumerate(dataloader_test):
-                #     real_A_test = Variable(input_A.copy_(batch_['A']))
-                #     real_B_test = Variable(input_B.copy_(batch_['B']))
-                #
-                #     fake_AB_test = netG_A2B(real_A_test)
-                #     fake_BA_test = netG_B2A(real_B_test)
-                #     gan_metrics.save(real_A_test.detach(),
-                #                      real_B_test.detach(),
-                #                      fake_BA_test.detach(),
-                #                      fake_AB_test.detach())
-                #
-                # score = gan_metrics.calculate_scores()
-                # with open(csv_fn, 'a') as f:
-                #     f.write('\n' + ','.join(str(e) for e in score))
 
             if iter % args.image_save_interval == 0:
                 samples_path_ = os.path.join(samples_path, str(iter / args.image_save_interval))
