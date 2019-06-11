@@ -8,12 +8,16 @@ import torchvision.transforms as transforms
 
 
 class ImageDataset(Dataset):
-    def __init__(self, root, transforms_=None, unaligned=False, mode='train'):
+    def __init__(self, root, transforms_=None, unaligned=False, mode='train', n=None):
         self.transform = transforms.Compose(transforms_)
         self.unaligned = unaligned
 
         self.files_A = sorted(glob(os.path.join(root, mode, 'A', '*')))
         self.files_B = sorted(glob(os.path.join(root, mode, 'B', '*')))
+
+        if n is not None:
+            self.files_A = self.files_A[:n]
+            self.files_B = self.files_B[:n]
 
     def __getitem__(self, index):
         img_A = self.files_A[index % len(self.files_A)]

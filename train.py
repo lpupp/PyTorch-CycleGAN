@@ -59,6 +59,8 @@ parser.add_argument('--mb_D', action='store_true', help='Mini-batch discriminati
 parser.add_argument('--fm_loss', action='store_true', help='Feature matching loss')
 parser.add_argument('--add_noise', action='store_true', help='Add noise to training images when loading')
 
+parser.add_argument('--data_subset', type=int, default=None, help='If set, will only use a data_subset dimensional subset of training data')
+
 parser.add_argument('--recon_loss_epoch', type=int, default=100, help='epoch to start linearly adapting recon loss weight')
 parser.add_argument('--start_recon_loss_val', type=float, default=10.0, help='starting weight of recon loss (cycleGAN default = 10.0)')
 parser.add_argument('--end_recon_loss_val', type=float, default=10.0, help='end weight of recon loss (cycleGAN default = 10.0)')
@@ -135,7 +137,7 @@ def main(args):
     if args.img_norm != 'znorm':
         raise NotImplementedError('{} not implemented'.format(args.img_norm))
 
-    modelarch = 'C_{0}_{1}_{2}_{3}_{4}{5}{6}{7}{8}{9}{10}{11}{12}{13}{14}{15}{16}{17}{18}{19}'.format(
+    modelarch = 'C_{0}_{1}_{2}_{3}_{4}{5}{6}{7}{8}{9}{10}{11}{12}{13}{14}{15}{16}{17}{18}{19}{20}'.format(
         args.size, args.batch_size, args.lr,  args.n_epochs, args.decay_epoch, # 0, 1, 2, 3, 4
         '_G' if args.G_extra else '',  # 5
         '_D' if args.D_extra else '',  # 6
@@ -151,7 +153,8 @@ def main(args):
         '_BF{}'.format(args.buffer_size) if args.buffer_size != 50 else '',  # 16
         '_N' if args.add_noise else '',  # 17
         '_L{}'.format(args.load_iter) if args.load_iter > 0 else '',  # 18
-        '_res{}'.format(args.n_resnet_blocks))  # 19
+        '_res{}'.format(args.n_resnet_blocks),  # 19
+        '_n{}'.format(args.data_subset) if args.data_subset is not None else '')  # 20
 
     samples_path = os.path.join(args.output_dir, modelarch, 'samples')
     safe_mkdirs(samples_path)
@@ -253,7 +256,7 @@ def main(args):
 
     transforms_ += transforms_norm
 
-    dataloader = DataLoader(ImageDataset(args.dataroot, transforms_=transforms_, unaligned=True),
+    dataloader = DataLoader(ImageDataset(args.dataroot, transforms_=transforms_, unaligned=True, n=args.data_subset),
                             batch_size=args.batch_size, shuffle=True, num_workers=args.n_cpu)
 
     # Transforms and dataloader for test set
