@@ -14,14 +14,12 @@ import itertools as it
 #credit2 - RAdam code by https://github.com/LiyuanLucasLiu/RAdam/blob/master/radam.py
 
 
-
 class Mish(nn.Module):
     def __init__(self):
         super().__init__()
 
     def forward(self, x):
-        #inlining this saves 1 second per epoch (V100 GPU) vs having a temp x and then returning x(!)
-        return x *(torch.tanh(F.softplus(x)))
+        return x * (torch.tanh(F.softplus(x)))
 
 
 class RAdam(Optimizer):
@@ -104,9 +102,9 @@ class RangerLars(Optimizer):
 
     def __init__(self, params, lr=1e-3, alpha=.5, k= 5, betas=(0.9, 0.999), eps=1e-8, weight_decay=0):
         if not 0.0 <= alpha <= 1.0:
-            raise ValueError(f'Invalid slow update rate: {alpha}')
+            raise ValueError('Invalid slow update rate: {}'.format(alpha))
         if not 1 <= k:
-            raise ValueError(f'Invalid lookahead steps: {k}')
+            raise ValueError('Invalid lookahead steps: {}'.format(k))
 
         defaults = dict(lr=lr, alpha=alpha, k=k, betas=betas, eps=eps, weight_decay=weight_decay)
         self.buffer = [[None, None, None] for ind in range(10)]
@@ -127,8 +125,6 @@ class RangerLars(Optimizer):
         #don't use grad for lookahead weights
         for w in it.chain(*self.slow_weights):
             w.requires_grad = False
-
-
 
     def __setstate__(self, state):
         super().__setstate__(state)
@@ -216,7 +212,7 @@ class RangerLars(Optimizer):
 
 
         #look ahead tracking and updating if latest batch = k
-        for group,slow_weights in zip(self.param_groups,self.slow_weights):
+        for group, slow_weights in zip(self.param_groups,self.slow_weights):
             group['step_counter'] += 1
             if group['step_counter'] % self.k != 0:
                 continue
@@ -230,18 +226,19 @@ class RangerLars(Optimizer):
 
         return loss
 
+
 class Ranger(Optimizer):
 
     def __init__(self, params, lr=1e-3, alpha=0.5, k=6, betas=(.9,0.999), eps=1e-8, weight_decay=0):
         #parameter checks
         if not 0.0 <= alpha <= 1.0:
-            raise ValueError(f'Invalid slow update rate: {alpha}')
+            raise ValueError('Invalid slow update rate: {}'.format(alpha))
         if not 1 <= k:
-            raise ValueError(f'Invalid lookahead steps: {k}')
+            raise ValueError('Invalid lookahead steps: {}'.format(k))
         if not lr > 0:
-            raise ValueError(f'Invalid Learning Rate: {lr}')
+            raise ValueError('Invalid Learning Rate: {}'.format(lr))
         if not eps > 0:
-            raise ValueError(f'Invalid eps: {eps}')
+            raise ValueError('Invalid eps: {}'.format(eps))
 
         #prep defaults and init torch.optim base
         defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay)
@@ -348,7 +345,5 @@ class Ranger(Optimizer):
                     continue
                 q.data.add_(self.alpha,p.data - q.data)
                 p.data.copy_(q.data)
-
-
 
         return loss
