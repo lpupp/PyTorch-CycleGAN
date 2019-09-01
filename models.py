@@ -8,6 +8,8 @@ import torch.nn as nn
 import torch.nn.init as init
 import torch.nn.functional as F
 
+from superutils import Mish
+
 
 class MinibatchDiscrimination(nn.Module):
     def __init__(self, in_features, out_features, kernel_dims, mean=False):
@@ -38,16 +40,16 @@ class MinibatchDiscrimination(nn.Module):
 
 
 class ResidualBlock(nn.Module):
-    def __init__(self, in_features):
+    def __init__(self, in_features, act='relu'):
         super(ResidualBlock, self).__init__()
 
         conv_block = [nn.ReflectionPad2d(1),
                       nn.Conv2d(in_features, in_features, 3),
-                      nn.InstanceNorm2d(in_features),
-                      nn.ReLU(inplace=True),
-                      nn.ReflectionPad2d(1),
-                      nn.Conv2d(in_features, in_features, 3),
                       nn.InstanceNorm2d(in_features)]
+        conv_block += [nn.ReLU(inplace=True)] if act == 'relu' else [Mish()]
+        conv_block += [nn.ReflectionPad2d(1),
+                       nn.Conv2d(in_features, in_features, 3),
+                       nn.InstanceNorm2d(in_features)]
 
         self.conv_block = nn.Sequential(*conv_block)
 
@@ -72,7 +74,7 @@ class Interpolate(nn.Module):
 class Generator(nn.Module):
     def __init__(self, input_nc, output_nc, n_residual_blocks=9,
                  img_size=64, keep_weights_proportional=False,
-                 extra_layer=False, upsample=False):
+                 extra_layer=False, upsample=False, act='relu'):
         super(Generator, self).__init__()
 
         if keep_weights_proportional:
@@ -93,8 +95,8 @@ class Generator(nn.Module):
         # Initial convolution block
         model = [nn.ReflectionPad2d(3),
                  nn.Conv2d(input_nc, 64, 7),
-                 nn.InstanceNorm2d(64),
-                 nn.ReLU(inplace=True)]
+                 nn.InstanceNorm2d(64)]
+        model += [nn.ReLU(inplace=True)] if act == 'relu' else [Mish()]
 
         # Downsampling
         in_features = 64
@@ -104,18 +106,19 @@ class Generator(nn.Module):
         for _ in range(2):
             if extra_layer:
                 model += [nn.Conv2d(in_features, in_features, filter_dim, padding=n_padding),
-                          nn.InstanceNorm2d(in_features),
-                          nn.ReLU(inplace=True)]
+                          nn.InstanceNorm2d(in_features)]
+                model += [nn.ReLU(inplace=True)] if act == 'relu' else [Mish()]
 
             model += [nn.Conv2d(in_features, out_features, filter_dim, stride=2, padding=n_padding),
-                      nn.InstanceNorm2d(out_features),
-                      nn.ReLU(inplace=True)]
+                      nn.InstanceNorm2d(out_features)]
+            model += [nn.ReLU(inplace=True)] if act == 'relu' else [Mish()]
+
             in_features = out_features
             out_features = in_features*2
 
         # Residual blocks
         for _ in range(n_residual_blocks):
-            model += [ResidualBlock(in_features)]
+            model += [ResidualBlock(in_features, act)]
 
         # Upsampling
         out_features = in_features//2
@@ -123,13 +126,13 @@ class Generator(nn.Module):
             for _ in range(2):
                 if extra_layer:
                     model += [nn.Conv2d(in_features, in_features, filter_dim, padding=n_padding),
-                              nn.InstanceNorm2d(in_features),
-                              nn.ReLU(inplace=True)]
+                              nn.InstanceNorm2d(in_features)]
+                    model += [nn.ReLU(inplace=True)] if act == 'relu' else [Mish()]
 
                 model += [nn.Conv2d(in_features, out_features, filter_dim, padding=n_padding),
-                          nn.InstanceNorm2d(out_features),
-                          nn.ReLU(inplace=True),
-                          Interpolate(2.0)]
+                          nn.InstanceNorm2d(out_features)]
+                model += [nn.ReLU(inplace=True)] if act == 'relu' else [Mish()]
+                model += [Interpolate(2.0)]
 
                 in_features = out_features
                 out_features = in_features//2
@@ -145,12 +148,13 @@ class Generator(nn.Module):
             for _ in range(2):
                 if extra_layer:
                     model += [nn.ConvTranspose2d(in_features, in_features, 3, padding=1),
-                              nn.InstanceNorm2d(in_features),
-                              nn.ReLU(inplace=True)]
+                              nn.InstanceNorm2d(in_features)]
+                    model += [nn.ReLU(inplace=True)] if act == 'relu' else [Mish()]
 
                 model += [nn.ConvTranspose2d(in_features, out_features, 3, stride=2, padding=1, output_padding=1),
-                          nn.InstanceNorm2d(out_features),
-                          nn.ReLU(inplace=True)]
+                          nn.InstanceNorm2d(out_features)]
+                model += [nn.ReLU(inplace=True)] if act == 'relu' else [Mish()]
+
                 in_features = out_features
                 out_features = in_features//2
 

@@ -28,6 +28,8 @@ from models import Generator, Discriminator
 from utils import ReplayBuffer, LambdaLR, weights_init_normal  # , Logger
 from datasets import ImageDataset
 
+from superutils import RAdam, Ranger, RangerLars
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--load_iter', type=int, default=0, help='starting iteration')
 parser.add_argument('--load_epoch', type=int, default=0, help='starting epoch (if load_iter != 0)')
@@ -83,6 +85,9 @@ parser.add_argument('--plot_interval', type=int, default=50, help='Print loss va
 parser.add_argument('--image_save_interval', type=int, default=1000, help='Save test results every image_save_interval iterations.')
 parser.add_argument('--model_save_interval', type=int, default=1000, help='Save models every model_save_interval iterations.')
 
+parser.add_argument('--act', type=str, default='relu', help='relu|mish.')
+parser.add_argument('--optim', type=str, default='adam', help='adam|radam|ranger|rangerlars.')
+
 
 def safe_mkdirs(path):
     if not os.path.exists(path):
@@ -137,7 +142,9 @@ def main(args):
     if args.img_norm != 'znorm':
         raise NotImplementedError('{} not implemented'.format(args.img_norm))
 
-    modelarch = 'C_{0}_{1}_{2}_{3}_{4}{5}{6}{7}{8}{9}{10}{11}{12}{13}{14}{15}{16}{17}{18}{19}{20}'.format(
+    assert args.act in ['relu', 'mish'], 'args.act = {}'.format(args.act)
+
+    modelarch = 'C_{0}_{1}_{2}_{3}_{4}{5}{6}{7}{8}{9}{10}{11}{12}{13}{14}{15}{16}{17}{18}{19}{20}{21}{22}'.format(
         args.size, args.batch_size, args.lr,  args.n_epochs, args.decay_epoch, # 0, 1, 2, 3, 4
         '_G' if args.G_extra else '',  # 5
         '_D' if args.D_extra else '',  # 6
@@ -154,7 +161,9 @@ def main(args):
         '_N' if args.add_noise else '',  # 17
         '_L{}'.format(args.load_iter) if args.load_iter > 0 else '',  # 18
         '_res{}'.format(args.n_resnet_blocks),  # 19
-        '_n{}'.format(args.data_subset) if args.data_subset is not None else '')  # 20
+        '_n{}'.format(args.data_subset) if args.data_subset is not None else '',  # 20
+        '_{}'.format(args.optim),  # 21
+        '_{}'.format(args.act))  # 22
 
     samples_path = os.path.join(args.output_dir, modelarch, 'samples')
     safe_mkdirs(samples_path)
@@ -168,11 +177,13 @@ def main(args):
     netG_A2B = Generator(args.input_nc, args.output_nc, img_size=args.size,
                          extra_layer=args.G_extra, upsample=args.upsample,
                          keep_weights_proportional=args.keep_prop,
-                         n_residual_blocks=args.n_resnet_blocks)
+                         n_residual_blocks=args.n_resnet_blocks,
+                         act=args.act)
     netG_B2A = Generator(args.output_nc, args.input_nc, img_size=args.size,
                          extra_layer=args.G_extra, upsample=args.upsample,
                          keep_weights_proportional=args.keep_prop,
-                         n_residual_blocks=args.n_resnet_blocks)
+                         n_residual_blocks=args.n_resnet_blocks,
+                         act=args.act)
     netD_A = Discriminator(args.input_nc, extra_layer=args.D_extra, mb_D=args.mb_D, x_size=args.size)
     netD_B = Discriminator(args.output_nc, extra_layer=args.D_extra, mb_D=args.mb_D, x_size=args.size)
 
@@ -209,10 +220,21 @@ def main(args):
     lr_D = args.lr / 2 if args.slow_D else args.lr
 
     # Optimizers & LR schedulers
-    optimizer_G = torch.optim.Adam(itertools.chain(netG_A2B.parameters(), netG_B2A.parameters()),
-                                   lr=args.lr, betas=(0.5, 0.999))
-    optimizer_D_A = torch.optim.Adam(netD_A.parameters(), lr=lr_G, betas=(0.5, 0.999))
-    optimizer_D_B = torch.optim.Adam(netD_B.parameters(), lr=lr_D, betas=(0.5, 0.999))
+    if args.optim == 'adam':
+        optim = torch.optim.Adam
+    elif args.optim == 'radam':
+        optim = RAdam
+    elif args.optim == 'ranger':
+        optim = Ranger
+    elif args.optim == 'rangerlars':
+        optim = RangerLars
+    else:
+        raise NotImplementedError('args.optim = {} not implemented'.format(args.optim))
+
+    optimizer_G = optim(itertools.chain(netG_A2B.parameters(), netG_B2A.parameters()),
+                        lr=args.lr, betas=(0.5, 0.999))
+    optimizer_D_A = optim(netD_A.parameters(), lr=lr_G, betas=(0.5, 0.999))
+    optimizer_D_B = optim(netD_B.parameters(), lr=lr_D, betas=(0.5, 0.999))
 
     lr_scheduler_G = torch.optim.lr_scheduler.LambdaLR(optimizer_G, lr_lambda=LambdaLR(args.n_epochs, args.load_iter, args.decay_epoch).step)
     lr_scheduler_D_A = torch.optim.lr_scheduler.LambdaLR(optimizer_D_A, lr_lambda=LambdaLR(args.n_epochs, args.load_iter, args.decay_epoch).step)
